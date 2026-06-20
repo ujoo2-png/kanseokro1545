@@ -9,10 +9,9 @@
 <body>
   <div id="app">
     <aside id="sidebar">
-      <div class="sidebar-header">
+      <div class="sidebar-header" onclick="goHome()" style="cursor:pointer">
         <h1>간석로1545</h1>
-        <p class="subtitle">관리자 시스템</p>
-        <span class="sidebar-version">v1.2.0</span>
+        <p class="subtitle">관리자 시스템 v1.5.0</p>
       </div>
       <nav id="nav">
         <ul>
@@ -89,7 +88,10 @@
             <div class="card">
               <div class="card-header">
                 <h3>건물 목록</h3>
-                <button class="btn btn-primary" onclick="showModal('building')">+ 건물 추가</button>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="building-search" placeholder="건물명 검색..." oninput="renderBuildings()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('building')">+ 건물 추가</button>
+                </div>
               </div>
               <table>
                 <thead><tr><th>건물명</th><th>주소</th><th>관리자</th><th>연락처</th><th>계좌정보</th><th>관리</th></tr></thead>
@@ -128,9 +130,9 @@
                 </div>
               </div>
               <table>
-                <thead><tr><th>세대</th><th>세입자</th><th>연락처</th><th>비상연락처</th><th>비상연락처 관계</th><th>부동산명</th><th>계약기간</th><th>월세</th><th>관리비</th><th>보증금</th><th>은행명</th><th>계좌번호</th><th>입금주</th><th>상태</th><th>관리</th></tr></thead>
+                <thead><tr><th>세대</th><th>세입자</th><th>연락처</th><th>비상연락처</th><th>비상연락처 관계</th><th>부동산명</th><th>계약기간</th><th>월세</th><th>관리비</th><th>보증금</th><th>은행명</th><th>계좌번호</th><th>입금주</th><th>복지할인</th><th>상태</th><th>관리</th></tr></thead>
                 <tbody id="contract-tbody">
-                  <tr><td colspan="15">등록된 계약이 없습니다.</td></tr>
+                  <tr><td colspan="16">등록된 계약이 없습니다.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -139,10 +141,14 @@
 
         <div id="page-meter" class="page">
           <div class="card">
-            <div class="card-header">
-              <h3>검침 입력</h3>
-              <button class="btn btn-primary" onclick="showModal('meter')">+ 검침 입력</button>
-            </div>
+              <div class="card-header">
+                <h3>검침 입력</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="meter-search" placeholder="세대명 검색..." oninput="renderMeters()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
+                  <button class="btn btn-primary" onclick="showModal('meter')">+ 검침 입력</button>
+                </div>
+              </div>
             <table>
               <thead>
                 <tr><th>세대</th><th>검침일</th><th>전기(kWh)</th><th>수도(m³)</th><th>관리</th></tr>
@@ -158,14 +164,30 @@
           <div class="card">
             <div class="card-header">
               <h3>청구서 생성</h3>
-              <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="previewBillPrint()" style="font-size:12px">명세서 출력</button>
+                <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid #eee;flex-wrap:wrap">
+              <select id="bill-unit-filter" onchange="renderBills()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none">
+                <option value="">전체 세대</option>
+              </select>
+              <select id="bill-status-filter" onchange="renderBills()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none">
+                <option value="">전체 상태</option>
+                <option value="unpaid">미납</option>
+                <option value="paid">납부완료</option>
+              </select>
+              <select id="bill-ym-filter" onchange="renderBills()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none">
+                <option value="">전체 기간</option>
+              </select>
             </div>
             <table>
               <thead>
-                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>공용</th><th>연체료</th><th>합계</th><th>납부상태</th></tr>
+                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>공용</th><th>TV수신료</th><th>연체료</th><th>합계</th><th>납부상태</th><th>관리</th></tr>
               </thead>
               <tbody id="billing-tbody">
-                <tr><td colspan="10">청구 내역이 없습니다.</td></tr>
+                <tr><td colspan="12">청구 내역이 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -174,12 +196,15 @@
         <div id="page-payment" class="page">
           <div class="card">
             <div class="card-header">
-              <h3>수납/미수금 관리</h3>
-              <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
-            </div>
-            <table>
-              <thead>
-                <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>상태</th></tr>
+                <h3>수납/미수금 관리</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="payment-search" placeholder="세대명 검색..." oninput="renderPayments()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>상태</th></tr>
               </thead>
               <tbody id="payment-tbody">
                 <tr><td colspan="7">수납 내역이 없습니다.</td></tr>
@@ -191,12 +216,15 @@
         <div id="page-notice" class="page">
           <div class="card">
             <div class="card-header">
-              <h3>공지 발송</h3>
-              <button class="btn btn-primary" onclick="showModal('notice')">+ 공지 작성</button>
-            </div>
-            <table>
-              <thead>
-                <tr><th>제목</th><th>작성일</th><th>발송상태</th><th>관리</th></tr>
+                <h3>공지 발송</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="notice-search" placeholder="제목 검색..." oninput="renderNotices()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('notice')">+ 공지 작성</button>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr><th>제목</th><th>작성일</th><th>발송상태</th><th>관리</th></tr>
               </thead>
               <tbody id="notice-tbody">
                 <tr><td colspan="4">공지가 없습니다.</td></tr>

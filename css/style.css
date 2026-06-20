@@ -1,3 +1,8 @@
+/*
+ * style.css — 건물 관리 시스템 스타일시트
+ * 간석로1545 관리자 시스템 v1.5.0
+ */
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
@@ -74,6 +79,8 @@ th { background: #fafafa; font-weight: 600; color: #666; font-size: 12px; text-t
 tr:hover { background: #fafbfc; }
 .row-active { background: #f0faf4; }
 .row-active:hover { background: #e4f5ea; }
+.row-vacant { background: #fff0f0; }
+.row-vacant:hover { background: #f5e0e0; }
 
 /* Buttons */
 .btn {
