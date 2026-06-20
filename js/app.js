@@ -127,24 +127,24 @@ function restorePageState() {
 }
 
 /** 앱 초기화 — Store 로드 → 네비게이션/모달/사이드바 설정 → 전체 렌더 + 통계 갱신 */
-async function init() {
+function init() {
   Store.init()
+  if (typeof ensureAdmin === 'function') ensureAdmin()
   setupNavigation()
   setupDraggableModal()
   setupSidebar()
-  const sb = getSupabase()
-  if (sb) {
-    const user = await checkAuth()
-    document.getElementById('login-btn-top').style.display = user ? 'none' : 'inline-block'
-    document.getElementById('logout-btn-top').style.display = user ? 'inline-block' : 'none'
-    onAuthChange(u => {
-      document.getElementById('login-btn-top').style.display = u ? 'none' : 'inline-block'
-      document.getElementById('logout-btn-top').style.display = u ? 'inline-block' : 'none'
-    })
-  }
+  checkAuth()
+  applyAuthUI()
+  onAuthChange(applyAuthUI)
   restorePageState()
   renderAll()
   updateStats()
+}
+
+function doLogoutUI() {
+  logout()
+  applyAuthUI()
+  location.reload()
 }
 
 /* Sidebar toggle — localStorage에 접힘 상태 저장/복원 */

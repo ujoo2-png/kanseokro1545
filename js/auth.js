@@ -1,64 +1,364 @@
-/** Supabase Auth - 관리자 로그인 */
-let authUser = null
+/* Auth system — localStorage 기반 (추후 Supabase Auth로 전환) */
+function esc(s) { return String(s).replace(/[<>&"']/g, function(m) { return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[m] }) }
+
+// 첫 실행 시 기본 관리자 계정 생성
+function ensureAdmin() {
+  if (!Store.getUsers().find(u => u.role === 'admin')) {
+    Store.addUser({
+      username: 'admin',
+      password: btoa('admin1234'),
+      name: '관리자',
+      email: 'admin@kanseokro.com',
+      phone: '',
+      role: 'admin',
+      unitId: null,
+      securityQuestion: '가장 좋아하는 색깔은?',
+      securityAnswer: btoa('admin'),
+    })
+  }
+}
+
+let currentUser = null
 let authListeners = []
 
 function onAuthChange(fn) { authListeners.push(fn) }
 
-async function checkAuth() {
-  const sb = getSupabase()
-  if (!sb) return null
-  const { data: { user } } = await sb.auth.getUser()
-  authUser = user
+function getSession() {
+  const raw = sessionStorage.getItem('kanseokro1545_session')
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch { return null }
+}
+
+function setSession(user) {
+  if (user) {
+    sessionStorage.setItem('kanseokro1545_session', JSON.stringify({ id: user.id, username: user.username, name: user.name, role: user.role, unitId: user.unitId }))
+  } else {
+    sessionStorage.removeItem('kanseokro1545_session')
+  }
+  currentUser = user
+  authListeners.forEach(fn => fn(user))
+}
+
+function checkAuth() {
+  const s = getSession()
+  if (!s) return null
+  const user = Store.getUsers().find(u => u.id === s.id)
+  currentUser = user
   return user
 }
 
-async function login(email, password) {
-  const sb = getSupabase()
-  if (!sb) throw new Error('Supabase가 설정되지 않았습니다.')
-  const { data, error } = await sb.auth.signInWithPassword({ email, password })
-  if (error) throw error
-  authUser = data.user
-  authListeners.forEach(fn => fn(authUser))
-  return authUser
+function hashPw(pw) { return btoa(pw) }
+
+// --- API ---
+
+function register(data) {
+  const users = Store.getUsers()
+  if (users.find(u => u.username === data.username)) return { error: '이미 사용 중인 아이디입니다.' }
+  if (data.email && users.find(u => u.email === data.email)) return { error: '이미 사용 중인 이메일입니다.' }
+  Store.addUser({
+    username: data.username,
+    password: hashPw(data.password),
+    name: data.name,
+    email: data.email,
+    phone: data.phone,
+    role: data.role || 'tenant',
+    unitId: data.unitId || null,
+    securityQuestion: data.securityQuestion || '',
+    securityAnswer: data.securityAnswer ? hashPw(data.securityAnswer) : '',
+  })
+  return { ok: true }
 }
 
-async function logout() {
-  const sb = getSupabase()
-  if (!sb) return
-  await sb.auth.signOut()
-  authUser = null
-  authListeners.forEach(fn => fn(null))
+function checkUsername(username) {
+  return !Store.getUsers().find(u => u.username === username)
 }
 
-function showLoginModal() {
+function login(username, password) {
+  const user = Store.findUserByUsername(username)
+  if (!user) return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
+  if (user.password !== hashPw(password)) return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
+  setSession(user)
+  return { ok: true, user }
+}
+
+function logout() {
+  setSession(null)
+}
+
+function findId(email) {
+  const user = Store.findUserByEmail(email)
+  if (!user) return { error: '등록된 이메일이 없습니다.' }
+  return { ok: true, username: user.username, createdAt: user.createdAt }
+}
+
+function findPassword(username) {
+  const user = Store.findUserByUsername(username)
+  if (!user) return { error: '등록된 아이디가 없습니다.' }
+  return { ok: true, question: user.securityQuestion }
+}
+
+function verifySecurityAnswer(username, answer) {
+  const user = Store.findUserByUsername(username)
+  if (!user) return { error: '등록된 아이디가 없습니다.' }
+  if (user.securityAnswer !== hashPw(answer)) return { error: '답변이 일치하지 않습니다.' }
+  return { ok: true, password: user.password }
+}
+
+function resetPassword(username, newPassword) {
+  const user = Store.findUserByUsername(username)
+  if (!user) return { error: '등록된 아이디가 없습니다.' }
+  Store.updateUser(user.id, { password: hashPw(newPassword) })
+  return { ok: true }
+}
+
+function isAdmin() { return currentUser && currentUser.role === 'admin' }
+function isManager() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') }
+function isTenant() { return currentUser && currentUser.role === 'tenant' }
+
+// --- UI ---
+
+function showAuthModal(tab) {
+  closeAuthModal()
   const overlay = document.createElement('div')
-  overlay.id = 'login-overlay'
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999'
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:12px;padding:32px;width:360px;box-shadow:0 4px 24px rgba(0,0,0,0.2)">
-      <h2 style="margin:0 0 20px;font-size:18px">관리자 로그인</h2>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <input id="login-email" type="email" placeholder="이메일" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-        <input id="login-password" type="password" placeholder="비밀번호" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-        <button id="login-btn" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">로그인</button>
-        <p id="login-error" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
-      </div>
-    </div>`
+  overlay.id = 'auth-overlay'
+  Object.assign(overlay.style, {
+    position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '9999'
+  })
   document.body.appendChild(overlay)
-  document.getElementById('login-btn').onclick = async () => {
-    const email = document.getElementById('login-email').value
-    const password = document.getElementById('login-password').value
-    try {
-      await login(email, password)
-      overlay.remove()
-      renderAll()
-    } catch (e) {
-      const err = document.getElementById('login-error')
-      err.textContent = e.message
-      err.style.display = 'block'
+  overlay.onclick = e => { if (e.target === overlay) closeAuthModal() }
+  switchAuthTab(tab || 'login')
+}
+
+function closeAuthModal() {
+  const el = document.getElementById('auth-overlay')
+  if (el) el.remove()
+}
+
+function switchAuthTab(tab) {
+  const container = document.getElementById('auth-overlay')
+  if (!container) return
+  const html = {
+    login: `
+      <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto">
+        <h2 style="margin:0 0 20px;font-size:18px">로그인</h2>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input id="af-id" type="text" placeholder="아이디" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <input id="af-pw" type="password" placeholder="비밀번호" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <button onclick="doLogin()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">로그인</button>
+          <p id="af-err" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px">
+            <a href="#" onclick="switchAuthTab('register');return false" style="color:#1a73e8;text-decoration:none">회원가입</a>
+            <span>
+              <a href="#" onclick="switchAuthTab('findId');return false" style="color:#1a73e8;text-decoration:none">아이디찾기</a>
+              <span style="color:#ddd;margin:0 6px">|</span>
+              <a href="#" onclick="switchAuthTab('findPw');return false" style="color:#1a73e8;text-decoration:none">비밀번호찾기</a>
+            </span>
+          </div>
+        </div>
+      </div>`,
+    register: `
+      <div style="background:#fff;border-radius:12px;padding:32px;width:420px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto">
+        <h2 style="margin:0 0 20px;font-size:18px">회원가입</h2>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div><label style="font-size:12px;color:#888">아이디 *</label>
+            <div style="display:flex;gap:6px">
+              <input id="af-reg-id" type="text" style="flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+              <button onclick="checkIdDup()" style="padding:8px 12px;background:#e8eaed;border:none;border-radius:8px;font-size:12px;cursor:pointer">중복확인</button>
+            </div>
+            <p id="af-reg-id-msg" style="font-size:11px;margin:2px 0 0;display:none"></p>
+          </div>
+          <div><label style="font-size:12px;color:#888">비밀번호 *</label><input id="af-reg-pw" type="password" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
+          <div><label style="font-size:12px;color:#888">비밀번호 확인 *</label><input id="af-reg-pw2" type="password" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
+          <div><label style="font-size:12px;color:#888">이름 *</label><input id="af-reg-name" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
+          <div><label style="font-size:12px;color:#888">이메일 * (아이디/비번 찾기에 사용)</label><input id="af-reg-email" type="email" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
+          <div><label style="font-size:12px;color:#888">연락처</label><input id="af-reg-phone" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
+          <div><label style="font-size:12px;color:#888">권한</label>
+            <select id="af-reg-role" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+              <option value="admin">관리자</option>
+              <option value="manager">매니저</option>
+              <option value="tenant" selected>입주자</option>
+            </select>
+          </div>
+          <div id="af-reg-unit-group" style="display:none"><label style="font-size:12px;color:#888">세대 (입주자 선택 시)</label>
+            <select id="af-reg-unit" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+              <option value="">선택 안함</option>
+              ${Store.getUnits().map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div><label style="font-size:12px;color:#888">비밀번호 찾기 질문 *</label>
+            <select id="af-reg-q" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+              <option value="가장 좋아하는 색깔은?">가장 좋아하는 색깔은?</option>
+              <option value="출신 초등학교 이름은?">출신 초등학교 이름은?</option>
+              <option value="가장 기억에 남는 여행지는?">가장 기억에 남는 여행지는?</option>
+              <option value="어머니 성함은?">어머니 성함은?</option>
+              <option value="반려동물 이름은?">반려동물 이름은?</option>
+            </select>
+          </div>
+          <div><label style="font-size:12px;color:#888">비밀번호 찾기 답변 *</label><input id="af-reg-a" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
+          <button onclick="doRegister()" style="margin-top:4px;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">가입하기</button>
+          <p id="af-reg-err" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
+          <div style="text-align:center;font-size:13px">이미 계정이 있으신가요? <a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인</a></div>
+        </div>
+      </div>`,
+    findId: `
+      <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.2)">
+        <h2 style="margin:0 0 20px;font-size:18px">아이디 찾기</h2>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <p style="font-size:13px;color:#666;margin:0">가입 시 등록한 이메일을 입력하세요.</p>
+          <input id="af-findid-email" type="email" placeholder="이메일" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <button onclick="doFindId()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">아이디 찾기</button>
+          <p id="af-findid-rs" style="font-size:13px;margin:0;display:none"></p>
+          <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
+        </div>
+      </div>`,
+    findPw: `
+      <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.2)">
+        <h2 style="margin:0 0 20px;font-size:18px">비밀번호 찾기</h2>
+        <div id="af-findpw-step1" style="display:flex;flex-direction:column;gap:10px">
+          <input id="af-findpw-id" type="text" placeholder="아이디" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <button onclick="doFindPwStep1()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">다음</button>
+          <p id="af-findpw-err" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
+          <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
+        </div>
+        <div id="af-findpw-step2" style="display:none;flex-direction:column;gap:10px">
+          <p id="af-findpw-q" style="font-size:13px;color:#666;margin:0"></p>
+          <input id="af-findpw-a" type="text" placeholder="답변" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <button onclick="doFindPwStep2()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">확인</button>
+          <p id="af-findpw-err2" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
+          <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
+        </div>
+        <div id="af-findpw-step3" style="display:none;flex-direction:column;gap:10px">
+          <p style="font-size:13px;color:#666;margin:0">새 비밀번호를 입력하세요.</p>
+          <input id="af-findpw-npw" type="password" placeholder="새 비밀번호" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <input id="af-findpw-npw2" type="password" placeholder="새 비밀번호 확인" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <button onclick="doFindPwStep3()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">비밀번호 변경</button>
+          <p id="af-findpw-err3" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
+          <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
+        </div>
+      </div>`,
+  }[tab]
+  if (!html) return
+  container.innerHTML = html
+  if (tab === 'register') {
+    document.getElementById('af-reg-role').onchange = () => {
+      document.getElementById('af-reg-unit-group').style.display = document.getElementById('af-reg-role').value === 'tenant' ? 'block' : 'none'
     }
   }
-  document.getElementById('login-password').onkeydown = e => {
-    if (e.key === 'Enter') document.getElementById('login-btn').click()
-  }
+}
+
+// --- Actions ---
+
+function doLogin() {
+  const id = document.getElementById('af-id').value.trim()
+  const pw = document.getElementById('af-pw').value
+  const err = document.getElementById('af-err')
+  if (!id || !pw) { err.textContent = '아이디와 비밀번호를 입력하세요.'; err.style.display = 'block'; return }
+  const r = login(id, pw)
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
+  closeAuthModal()
+  applyAuthUI()
+  renderAll()
+}
+
+function doRegister() {
+  const id = document.getElementById('af-reg-id').value.trim()
+  const pw = document.getElementById('af-reg-pw').value
+  const pw2 = document.getElementById('af-reg-pw2').value
+  const name = document.getElementById('af-reg-name').value.trim()
+  const email = document.getElementById('af-reg-email').value.trim()
+  const phone = document.getElementById('af-reg-phone').value.trim()
+  const role = document.getElementById('af-reg-role').value
+  const unitId = parseInt(document.getElementById('af-reg-unit')?.value) || null
+  const q = document.getElementById('af-reg-q').value
+  const a = document.getElementById('af-reg-a').value.trim()
+  const err = document.getElementById('af-reg-err')
+  if (!id) { err.textContent = '아이디를 입력하세요.'; err.style.display = 'block'; return }
+  if (!pw || pw.length < 4) { err.textContent = '비밀번호는 4자리 이상 입력하세요.'; err.style.display = 'block'; return }
+  if (pw !== pw2) { err.textContent = '비밀번호가 일치하지 않습니다.'; err.style.display = 'block'; return }
+  if (!name) { err.textContent = '이름을 입력하세요.'; err.style.display = 'block'; return }
+  if (!email) { err.textContent = '이메일을 입력하세요.'; err.style.display = 'block'; return }
+  if (!a) { err.textContent = '비밀번호 찾기 답변을 입력하세요.'; err.style.display = 'block'; return }
+  const r = register({ username: id, password: pw, name, email, phone, role, unitId, securityQuestion: q, securityAnswer: a })
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
+  err.style.display = 'none'
+  switchAuthTab('login')
+}
+
+function checkIdDup() {
+  const id = document.getElementById('af-reg-id').value.trim()
+  const msg = document.getElementById('af-reg-id-msg')
+  if (!id) { msg.textContent = '아이디를 입력하세요.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  const ok = checkUsername(id)
+  msg.textContent = ok ? '사용 가능한 아이디입니다.' : '이미 사용 중인 아이디입니다.'
+  msg.style.color = ok ? '#137333' : '#d32f2f'
+  msg.style.display = 'block'
+}
+
+function doFindId() {
+  const email = document.getElementById('af-findid-email').value.trim()
+  const rs = document.getElementById('af-findid-rs')
+  if (!email) { rs.textContent = '이메일을 입력하세요.'; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
+  const r = findId(email)
+  if (r.error) { rs.textContent = r.error; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
+  rs.innerHTML = `회원님의 아이디는 <strong>${r.username}</strong>입니다. (가입일: ${r.createdAt})`
+  rs.style.color = '#137333'; rs.style.display = 'block'
+}
+
+let _findPwUsername = ''
+
+function doFindPwStep1() {
+  const id = document.getElementById('af-findpw-id').value.trim()
+  const err = document.getElementById('af-findpw-err')
+  if (!id) { err.textContent = '아이디를 입력하세요.'; err.style.display = 'block'; return }
+  const r = findPassword(id)
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
+  _findPwUsername = id
+  document.getElementById('af-findpw-q').textContent = '질문: ' + r.question
+  document.getElementById('af-findpw-step1').style.display = 'none'
+  document.getElementById('af-findpw-step2').style.display = 'flex'
+}
+
+function doFindPwStep2() {
+  const a = document.getElementById('af-findpw-a').value.trim()
+  const err = document.getElementById('af-findpw-err2')
+  if (!a) { err.textContent = '답변을 입력하세요.'; err.style.display = 'block'; return }
+  const r = verifySecurityAnswer(_findPwUsername, a)
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
+  document.getElementById('af-findpw-step2').style.display = 'none'
+  document.getElementById('af-findpw-step3').style.display = 'flex'
+}
+
+function doFindPwStep3() {
+  const npw = document.getElementById('af-findpw-npw').value
+  const npw2 = document.getElementById('af-findpw-npw2').value
+  const err = document.getElementById('af-findpw-err3')
+  if (!npw || npw.length < 4) { err.textContent = '비밀번호는 4자리 이상 입력하세요.'; err.style.display = 'block'; return }
+  if (npw !== npw2) { err.textContent = '비밀번호가 일치하지 않습니다.'; err.style.display = 'block'; return }
+  const r = resetPassword(_findPwUsername, npw)
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
+  document.getElementById('af-findpw-step3').innerHTML = '<p style="color:#137333;font-size:14px;text-align:center">비밀번호가 변경되었습니다.</p><div style="text-align:center;margin-top:10px"><a href="#" onclick="switchAuthTab(\'login\');return false" style="color:#1a73e8;text-decoration:none">로그인하기</a></div>'
+}
+
+// --- UI integration ---
+
+function applyAuthUI() {
+  const user = currentUser
+  document.getElementById('user-info').textContent = user ? (user.name + (user.role === 'admin' ? ' (관리자)' : user.role === 'manager' ? ' (매니저)' : ' (입주자)')) : '로그인 필요'
+  document.getElementById('login-btn-top').style.display = user ? 'none' : 'inline-block'
+  document.getElementById('logout-btn-top').style.display = user ? 'inline-block' : 'none'
+  // Role-based menu visibility
+  document.querySelectorAll('#nav a').forEach(a => {
+    const page = a.dataset.page
+    if (!user) { a.style.display = 'none'; return }
+    if (user.role === 'admin') { a.style.display = 'block'; return }
+    if (user.role === 'manager') {
+      a.style.display = ['dashboard', 'meter', 'billing', 'payment'].includes(page) ? 'block' : 'none'
+      return
+    }
+    if (user.role === 'tenant') {
+      a.style.display = page === 'dashboard' ? 'block' : 'none'
+      return
+    }
+  })
 }

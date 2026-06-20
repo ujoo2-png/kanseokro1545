@@ -32,9 +32,9 @@
           <h2 id="page-title">대시보드</h2>
         </div>
         <div class="topbar-right">
-          <span id="user-info">관리자</span>
-          <button id="login-btn-top" onclick="showLoginModal()" style="display:none;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">로그인</button>
-          <button id="logout-btn-top" onclick="logout();location.reload()" style="display:none;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">로그아웃</button>
+          <span id="user-info">로그인 필요</span>
+          <button id="login-btn-top" onclick="showAuthModal('login')" style="display:none;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">로그인</button>
+          <button id="logout-btn-top" onclick="doLogoutUI()" style="display:none;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">로그아웃</button>
         </div>
       </header>
       <section id="content">
