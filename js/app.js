@@ -627,29 +627,42 @@ function showModal(type, editData) {
     }
     case 'payment': {
       const units = Store.getUnits()
+      const unpaidBills = Store.getBills().filter(b => b.status !== 'paid')
+      const defaultUnitId = editData ? editData.unitId : (unpaidBills.length ? unpaidBills[0].unitId : '')
       title.textContent = '입금 등록'
       body.innerHTML = `
-        <div class="form-group"><label>세대</label><select id="f-punit">${
-          units.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')
-        }</select></div>
-        <div class="form-group"><label>청구건</label><select id="f-pbill"></select></div>
+        <div class="form-group"><label>세대</label>
+          <select id="f-punit">${
+            units.map(u => `<option value="${u.id}" ${u.id === defaultUnitId ? 'selected' : ''}>${esc(u.name)}</option>`).join('')
+          }</select>
+        </div>
+        <div class="form-group"><label>청구건 (세대명 - 청구월 - 금액)</label>
+          <select id="f-pbill">${
+            unpaidBills.length === 0
+              ? '<option value="">미납 청구건이 없습니다</option>'
+              : unpaidBills.map(b => {
+                  const u = units.find(unit => unit.id === b.unitId)
+                  return `<option value="${b.id}" data-unitid="${b.unitId}" ${b.unitId === defaultUnitId ? 'selected' : ''}>${esc(u ? u.name : '?')} - ${b.yearMonth} - ${fmt(b.total)}원 (잔여 ${fmt(b.total - Store.getPaidTotal(b.id))})</option>`
+                }).join('')
+          }</select>
+        </div>
         <div class="form-group"><label>납부액</label><input id="f-pamount" type="text" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
         <div class="form-group"><label>납부일</label><input id="f-pdate" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
       `
-      const updateBillOptions = () => {
-        const uid = parseInt(document.getElementById('f-punit').value)
-        const sel = document.getElementById('f-pbill')
-        const filtered = Store.getBills().filter(b => b.unitId === uid && b.status !== 'paid')
-        if (filtered.length === 0) {
-          sel.innerHTML = '<option value="">미납 청구건이 없습니다</option>'
-          return
+      const syncUnitFromBill = () => {
+        const opt = document.getElementById('f-pbill').selectedOptions[0]
+        if (opt && opt.value) {
+          const billUnitId = parseInt(opt.dataset.unitid)
+          document.getElementById('f-punit').value = billUnitId
         }
-        sel.innerHTML = filtered.map(b => `<option value="${b.id}">${b.yearMonth} - ${fmt(b.total)}원 (잔여 ${fmt(Store.getPaidTotal(b.id) > 0 ? b.total - Store.getPaidTotal(b.id) : b.total)})</option>`).join('')
       }
-      setTimeout(() => {
-        document.getElementById('f-punit').addEventListener('change', updateBillOptions)
-        updateBillOptions()
-      }, 0)
+      document.getElementById('f-pbill').addEventListener('change', syncUnitFromBill)
+      document.getElementById('f-punit').addEventListener('change', () => {
+        const uid = parseInt(document.getElementById('f-punit').value)
+        Array.from(document.getElementById('f-pbill').options).forEach(o => {
+          o.style.display = o.value && parseInt(o.dataset.unitid) === uid ? '' : 'none'
+        })
+      })
       break
     }
     case 'bill-detail': {
@@ -859,14 +872,10 @@ function saveModal() {
     }
     case 'payment': {
       const billId = parseInt(document.getElementById('f-pbill').value)
-      const selectedUnitId = parseInt(document.getElementById('f-punit').value)
       const bill = Store.getBills().find(b => b.id === billId)
       if (!bill) return alert('청구건을 선택하세요.')
-      if (bill.unitId !== selectedUnitId) {
-        return alert('선택한 세대와 청구건의 세대가 일치하지 않습니다. 다시 선택해주세요.')
-      }
       const data = {
-        unitId: selectedUnitId,
+        unitId: bill.unitId,
         billId,
         amount: parseInt(document.getElementById('f-pamount').value.replace(/,/g, '')) || 0,
         date: document.getElementById('f-pdate').value,
