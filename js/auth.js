@@ -121,10 +121,20 @@ function showAuthModal(tab) {
   closeAuthModal()
   const overlay = document.createElement('div')
   overlay.id = 'auth-overlay'
-  Object.assign(overlay.style, {
-    position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.5)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '9999'
-  })
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 9999;
+    background:
+      radial-gradient(circle at 20% 50%, rgba(26,115,232,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(21,87,176,0.1) 0%, transparent 50%),
+      radial-gradient(circle at 50% 80%, rgba(255,255,255,0.05) 0%, transparent 50%),
+      linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex; align-items: center; justify-content: center;
+  `
+  // SVG dot pattern overlay
+  const pattern = document.createElement('div')
+  pattern.style.cssText = 'position:absolute;inset:0;pointer-events:none;opacity:0.08'
+  pattern.innerHTML = `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="white"/></pattern></defs><rect width="100%" height="100%" fill="url(#dots)"/></svg>`
+  overlay.appendChild(pattern)
   document.body.appendChild(overlay)
   overlay.onclick = e => { if (e.target === overlay) closeAuthModal() }
   switchAuthTab(tab || 'login')
