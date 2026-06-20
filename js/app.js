@@ -4,8 +4,21 @@ function init() {
   Store.init()
   setupNavigation()
   setupDraggableModal()
+  setupSidebar()
   renderAll()
   updateStats()
+}
+
+/* Sidebar toggle */
+function setupSidebar() {
+  const saved = localStorage.getItem('kanseokro1545_sidebar')
+  if (saved === 'collapsed') document.getElementById('app').classList.add('sidebar-collapsed')
+}
+
+function toggleSidebar() {
+  const app = document.getElementById('app')
+  app.classList.toggle('sidebar-collapsed')
+  localStorage.setItem('kanseokro1545_sidebar', app.classList.contains('sidebar-collapsed') ? 'collapsed' : '')
 }
 
 /* Navigation */
@@ -43,19 +56,23 @@ function renderAll() {
   renderPayments()
   renderNotices()
   renderRecent()
+  renderDashboardContracts()
 }
 
 function renderBuildings() {
   const tbody = document.getElementById('building-tbody')
   const list = Store.getBuildings()
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="3">등록된 건물이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="6">등록된 건물이 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = list.map(b => `
     <tr>
       <td>${b.name}</td>
       <td>${b.address || '-'}</td>
+      <td>${b.adminName || '-'}</td>
+      <td>${b.adminPhone || '-'}</td>
+      <td>${b.bankName || '-'} ${b.accountNumber ? '(' + b.accountNumber + ')' : ''}</td>
       <td>
         <button class="btn btn-secondary" onclick="editBuilding(${b.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteBuilding(${b.id})" style="padding:4px 8px;font-size:12px">삭제</button>
@@ -70,13 +87,11 @@ function renderUnits() {
   const q = (document.getElementById('unit-search')?.value || '').toLowerCase()
   if (q) {
     units = units.filter(u =>
-      (u.name || '').toLowerCase().includes(q) ||
-      (u.tenant || '').toLowerCase().includes(q) ||
-      (u.phone || '').includes(q)
+      (u.name || '').toLowerCase().includes(q)
     )
   }
   if (!units.length) {
-    tbody.innerHTML = '<tr><td colspan="5">등록된 세대가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="11">등록된 세대가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = units.map(u => {
@@ -84,8 +99,14 @@ function renderUnits() {
     return `<tr>
       <td>${u.name}</td>
       <td>${bld ? bld.name : '-'}</td>
-      <td>${u.tenant || '-'}</td>
-      <td>${u.phone || '-'}</td>
+      <td>${u.area ? u.area + '평' : '-'}</td>
+      <td>${yn(u.hasAC)}</td>
+      <td>${yn(u.hasTV)}</td>
+      <td>${yn(u.hasFridge)}</td>
+      <td>${yn(u.hasWasher)}</td>
+      <td>${yn(u.hasTVStand)}</td>
+      <td>${yn(u.hasBed)}</td>
+      <td>${yn(u.hasCloset)}</td>
       <td>
         <button class="btn btn-secondary" onclick="editUnit(${u.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteUnit(${u.id})" style="padding:4px 8px;font-size:12px">삭제</button>
@@ -103,24 +124,33 @@ function renderContracts() {
       const unit = Store.getUnits().find(u => u.id === c.unitId)
       return (c.tenant || '').toLowerCase().includes(q) ||
         (c.phone || '').includes(q) ||
+        (c.agency || '').toLowerCase().includes(q) ||
         (unit && unit.name.toLowerCase().includes(q))
     })
   }
   if (!contracts.length) {
-    tbody.innerHTML = '<tr><td colspan="8">등록된 계약이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="15">등록된 계약이 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = contracts.map(c => {
     const unit = Store.getUnits().find(u => u.id === c.unitId)
     const badge = c.status === 'active' ? 'badge-paid' : 'badge-unpaid'
     const label = c.status === 'active' ? '진행중' : '종료'
-    return `<tr>
+    const activeClass = c.status === 'active' ? 'row-active' : ''
+    return `<tr class="${activeClass}">
       <td>${unit ? unit.name : '알 수 없음'}</td>
       <td>${c.tenant || '-'}</td>
       <td>${c.phone || '-'}</td>
+      <td>${c.emergency || '-'}</td>
+      <td>${c.emergencyRel || '-'}</td>
+      <td>${c.agency || '-'}</td>
       <td>${c.contractStart || '-'} ~ ${c.contractEnd || '-'}</td>
       <td>${fmt(c.rent)}</td>
       <td>${fmt(c.maintenanceFee)}</td>
+      <td>${fmt(c.deposit)}</td>
+      <td>${c.bankName || '-'}</td>
+      <td>${c.accountNumber || '-'}</td>
+      <td>${c.accountHolder || '-'}</td>
       <td><span class="badge ${badge}">${label}</span></td>
       <td>
         <button class="btn btn-secondary" onclick="editContract(${c.id})" style="padding:4px 8px;font-size:12px">수정</button>
@@ -253,6 +283,30 @@ function updateStats() {
   document.getElementById('stat-unpaid').textContent = unpaid
 }
 
+/* Dashboard - contract status */
+function renderDashboardContracts() {
+  const tbody = document.getElementById('dashboard-contract-tbody')
+  const units = Store.getUnits()
+  document.getElementById('dashboard-date').textContent = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) + ' 기준'
+  if (!units.length) {
+    tbody.innerHTML = '<tr><td colspan="4">등록된 세대가 없습니다.</td></tr>'
+    return
+  }
+  tbody.innerHTML = units.map(u => {
+    const bld = Store.getBuildings().find(b => b.id === u.buildingId)
+    const contract = Store.getContracts().filter(c => c.unitId === u.id).sort((a, b) => (b.contractStart || '').localeCompare(a.contractStart || ''))[0]
+    const period = contract ? (contract.contractStart || '-') + ' ~ ' + (contract.contractEnd || '-') : '-'
+    const badge = contract && contract.status === 'active' ? 'badge-paid' : 'badge-unpaid'
+    const label = contract && contract.status === 'active' ? '계약중' : '계약없음'
+    return `<tr>
+      <td>${u.name}</td>
+      <td>${bld ? bld.name : '-'}</td>
+      <td>${period}</td>
+      <td><span class="badge ${badge}">${label}</span></td>
+    </tr>`
+  }).join('')
+}
+
 /* Draggable modal */
 function setupDraggableModal() {
   const header = document.getElementById('modal-header')
@@ -305,21 +359,35 @@ function showModal(type, editData) {
         <div class="form-group"><label>건물명</label><input id="f-bname" value="${editData ? esc(editData.name) : ''}"></div>
         <div class="form-group"><label>주소</label><input id="f-baddr" value="${editData ? esc(editData.address || '') : ''}"></div>
         <div class="form-group"><label>메모</label><textarea id="f-bmemo" rows="3">${editData ? esc(editData.memo || '') : ''}</textarea></div>
+        <h4 style="margin:16px 0 8px;font-size:14px;color:#555">관리자 정보</h4>
+        <div class="form-group"><label>관리자 이름</label><input id="f-badminname" value="${editData ? esc(editData.adminName || '') : ''}"></div>
+        <div class="form-group"><label>핸드폰</label><input id="f-badminphone" value="${editData ? esc(editData.adminPhone || '') : ''}"></div>
+        <div class="form-group"><label>이메일</label><input id="f-badminemail" type="email" value="${editData ? esc(editData.adminEmail || '') : ''}"></div>
+        <h4 style="margin:16px 0 8px;font-size:14px;color:#555">관리 계좌정보</h4>
+        <div class="form-group"><label>은행명</label><input id="f-bbank" value="${editData ? esc(editData.bankName || '') : ''}"></div>
+        <div class="form-group"><label>예금주</label><input id="f-baccountholder" value="${editData ? esc(editData.accountHolder || '') : ''}"></div>
+        <div class="form-group"><label>통장계좌번호</label><input id="f-baccount" value="${editData ? esc(editData.accountNumber || '') : ''}"></div>
       `
       break
     }
     case 'unit': {
       const buildings = Store.getBuildings()
       title.textContent = editData ? '세대 수정' : '세대 추가'
+      const selYn = (key) => editData && editData[key]
       body.innerHTML = `
         <div class="form-group"><label>세대명 (예: 101호)</label><input id="f-uname" value="${editData ? esc(editData.name) : ''}"></div>
         <div class="form-group"><label>건물</label><select id="f-ubuilding"><option value="">선택 안함</option>${
           buildings.map(b => `<option value="${b.id}" ${editData && editData.buildingId === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')
         }</select></div>
-        <div class="form-group"><label>세입자명</label><input id="f-utenant" value="${editData ? esc(editData.tenant || '') : ''}"></div>
-        <div class="form-group"><label>연락처</label><input id="f-uphone" value="${editData ? esc(editData.phone || '') : ''}"></div>
-        <div class="form-group"><label>이메일</label><input id="f-uemail" type="email" value="${editData ? esc(editData.email || '') : ''}"></div>
-        <div class="form-group"><label>비상연락처</label><input id="f-uemergency" value="${editData ? esc(editData.emergency || '') : ''}"></div>
+        <h4 style="margin:16px 0 8px;font-size:14px;color:#555">옵션 정보</h4>
+        <div class="form-group"><label>평수</label><input id="f-uarea" type="number" value="${editData ? editData.area || '' : ''}"></div>
+        <div class="form-group"><label>냉난방기</label><select id="f-uac"><option value="false">무</option><option value="true" ${selYn('hasAC') ? 'selected' : ''}>유</option></select></div>
+        <div class="form-group"><label>TV</label><select id="f-utv"><option value="false">무</option><option value="true" ${selYn('hasTV') ? 'selected' : ''}>유</option></select></div>
+        <div class="form-group"><label>냉장고</label><select id="f-ufridge"><option value="false">무</option><option value="true" ${selYn('hasFridge') ? 'selected' : ''}>유</option></select></div>
+        <div class="form-group"><label>세탁기</label><select id="f-uwash"><option value="false">무</option><option value="true" ${selYn('hasWasher') ? 'selected' : ''}>유</option></select></div>
+        <div class="form-group"><label>TV거실장</label><select id="f-utvstand"><option value="false">무</option><option value="true" ${selYn('hasTVStand') ? 'selected' : ''}>유</option></select></div>
+        <div class="form-group"><label>침대</label><select id="f-ubed"><option value="false">무</option><option value="true" ${selYn('hasBed') ? 'selected' : ''}>유</option></select></div>
+        <div class="form-group"><label>옷장</label><select id="f-ucloset"><option value="false">무</option><option value="true" ${selYn('hasCloset') ? 'selected' : ''}>유</option></select></div>
       `
       break
     }
@@ -334,9 +402,15 @@ function showModal(type, editData) {
         <div class="form-group"><label>연락처</label><input id="f-cphone" value="${editData ? esc(editData.phone || '') : ''}"></div>
         <div class="form-group"><label>이메일</label><input id="f-cemail" type="email" value="${editData ? esc(editData.email || '') : ''}"></div>
         <div class="form-group"><label>비상연락처</label><input id="f-cemergency" value="${editData ? esc(editData.emergency || '') : ''}"></div>
-        <div class="form-group"><label>월세</label><input id="f-crent" type="number" value="${editData ? editData.rent : ''}"></div>
-        <div class="form-group"><label>관리비</label><input id="f-cmfee" type="number" value="${editData ? editData.maintenanceFee : ''}"></div>
-        <div class="form-group"><label>보증금</label><input id="f-cdeposit" type="number" value="${editData ? editData.deposit || '' : ''}"></div>
+        <div class="form-group"><label>비상연락처 관계</label><input id="f-cemergencyrel" value="${editData ? esc(editData.emergencyRel || '') : ''}"></div>
+        <div class="form-group"><label>계약부동산명</label><input id="f-cagency" value="${editData ? esc(editData.agency || '') : ''}"></div>
+        <h4 style="margin:16px 0 8px;font-size:14px;color:#555">송금계좌 정보</h4>
+        <div class="form-group"><label>은행명</label><input id="f-cbank" value="${editData ? esc(editData.bankName || '') : ''}"></div>
+        <div class="form-group"><label>계좌번호</label><input id="f-caccount" value="${editData ? esc(editData.accountNumber || '') : ''}"></div>
+        <div class="form-group"><label>입금주</label><input id="f-caccountholder" value="${editData ? esc(editData.accountHolder || '') : ''}"></div>
+        <div class="form-group"><label>월세</label><input id="f-crent" type="text" inputmode="numeric" value="${editData ? fm(editData.rent) : ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
+        <div class="form-group"><label>관리비</label><input id="f-cmfee" type="text" inputmode="numeric" value="${editData ? fm(editData.maintenanceFee) : ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
+        <div class="form-group"><label>보증금</label><input id="f-cdeposit" type="text" inputmode="numeric" value="${editData ? fm(editData.deposit || '') : ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
         <div class="form-group"><label>납부일</label><input id="f-cduedate" type="number" value="${editData ? editData.dueDate || 10 : 10}"></div>
         <div class="form-group"><label>계약 시작</label><input id="f-cstart" type="date" value="${editData ? editData.contractStart || '' : ''}"></div>
         <div class="form-group"><label>계약 종료</label><input id="f-cend" type="date" value="${editData ? editData.contractEnd || '' : ''}"></div>
@@ -370,7 +444,7 @@ function showModal(type, editData) {
           units.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')
         }</select></div>
         <div class="form-group"><label>청구건</label><select id="f-pbill"></select></div>
-        <div class="form-group"><label>납부액</label><input id="f-pamount" type="number"></div>
+        <div class="form-group"><label>납부액</label><input id="f-pamount" type="text" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
         <div class="form-group"><label>납부일</label><input id="f-pdate" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
       `
       const updateBillOptions = () => {
@@ -411,6 +485,12 @@ function saveModal() {
         name: document.getElementById('f-bname').value.trim(),
         address: document.getElementById('f-baddr').value.trim(),
         memo: document.getElementById('f-bmemo').value.trim(),
+        adminName: document.getElementById('f-badminname').value.trim(),
+        adminPhone: document.getElementById('f-badminphone').value.trim(),
+        adminEmail: document.getElementById('f-badminemail').value.trim(),
+        bankName: document.getElementById('f-bbank').value.trim(),
+        accountHolder: document.getElementById('f-baccountholder').value.trim(),
+        accountNumber: document.getElementById('f-baccount').value.trim(),
       }
       if (!data.name) return alert('건물명을 입력하세요.')
       if (state.editingId) Store.updateBuilding(state.editingId, data)
@@ -421,10 +501,14 @@ function saveModal() {
       const data = {
         buildingId: parseInt(document.getElementById('f-ubuilding').value) || null,
         name: document.getElementById('f-uname').value.trim(),
-        tenant: document.getElementById('f-utenant').value.trim(),
-        phone: document.getElementById('f-uphone').value.trim(),
-        email: document.getElementById('f-uemail').value.trim(),
-        emergency: document.getElementById('f-uemergency').value.trim(),
+        area: parseInt(document.getElementById('f-uarea').value) || 0,
+        hasAC: document.getElementById('f-uac').value === 'true',
+        hasTV: document.getElementById('f-utv').value === 'true',
+        hasFridge: document.getElementById('f-ufridge').value === 'true',
+        hasWasher: document.getElementById('f-uwash').value === 'true',
+        hasTVStand: document.getElementById('f-utvstand').value === 'true',
+        hasBed: document.getElementById('f-ubed').value === 'true',
+        hasCloset: document.getElementById('f-ucloset').value === 'true',
       }
       if (!data.name) return alert('세대명을 입력하세요.')
       if (state.editingId) Store.updateUnit(state.editingId, data)
@@ -438,9 +522,14 @@ function saveModal() {
         phone: document.getElementById('f-cphone').value.trim(),
         email: document.getElementById('f-cemail').value.trim(),
         emergency: document.getElementById('f-cemergency').value.trim(),
-        rent: parseInt(document.getElementById('f-crent').value) || 0,
-        maintenanceFee: parseInt(document.getElementById('f-cmfee').value) || 0,
-        deposit: parseInt(document.getElementById('f-cdeposit').value) || 0,
+        emergencyRel: document.getElementById('f-cemergencyrel').value.trim(),
+        agency: document.getElementById('f-cagency').value.trim(),
+        bankName: document.getElementById('f-cbank').value.trim(),
+        accountNumber: document.getElementById('f-caccount').value.trim(),
+        accountHolder: document.getElementById('f-caccountholder').value.trim(),
+        rent: parseInt(document.getElementById('f-crent').value.replace(/,/g, '')) || 0,
+        maintenanceFee: parseInt(document.getElementById('f-cmfee').value.replace(/,/g, '')) || 0,
+        deposit: parseInt(document.getElementById('f-cdeposit').value.replace(/,/g, '')) || 0,
         dueDate: parseInt(document.getElementById('f-cduedate').value) || 10,
         contractStart: document.getElementById('f-cstart').value,
         contractEnd: document.getElementById('f-cend').value,
@@ -468,7 +557,7 @@ function saveModal() {
       const data = {
         unitId: parseInt(document.getElementById('f-punit').value),
         billId,
-        amount: parseInt(document.getElementById('f-pamount').value) || 0,
+        amount: parseInt(document.getElementById('f-pamount').value.replace(/,/g, '')) || 0,
         date: document.getElementById('f-pdate').value,
       }
       Store.addPayment(data)
@@ -608,6 +697,14 @@ function esc(s) {
   const d = document.createElement('div')
   d.textContent = s
   return d.innerHTML
+}
+
+function yn(v) {
+  return v ? '<span class="badge badge-paid">유</span>' : '<span class="badge badge-pending">무</span>'
+}
+
+function fm(n) {
+  return (n || 0).toLocaleString()
 }
 
 init()
