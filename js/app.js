@@ -136,6 +136,7 @@ function init() {
   checkAuth()
   applyAuthUI()
   onAuthChange(applyAuthUI)
+  if (!currentUser) showAuthModal('login')
   restorePageState()
   renderAll()
   updateStats()
@@ -199,6 +200,7 @@ function renderAll() {
   populatePrepaidFilter()
   renderPrepaids()
   renderNotices()
+  renderUsers()
   renderRecent()
   renderDashboardContracts()
 }
@@ -659,7 +661,47 @@ function renderRecent() {
   }).join('')
 }
 
-function updateStats() {
+function renderUsers() {
+  const tbody = document.getElementById('user-tbody')
+  if (!tbody) return
+  let users = Store.getUsers()
+  const q = (document.getElementById('user-search')?.value || '').toLowerCase()
+  if (q) users = users.filter(u => (u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q))
+  const units = Store.getUnits()
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="8">등록된 사용자가 없습니다.</td></tr>'
+    return
+  }
+  tbody.innerHTML = users.map(u => {
+    const roleLabel = { admin: '관리자', manager: '매니저', tenant: '입주자' }[u.role] || u.role
+    const unitName = u.unitId ? (units.find(x => x.id === u.unitId)?.name || '-') : '-'
+    const canDelete = currentUser && currentUser.id !== u.id
+    return `<tr>
+      <td style="font-weight:600">${esc(u.username)}</td>
+      <td>${esc(u.name || '-')}</td>
+      <td>${esc(u.email || '-')}</td>
+      <td>${esc(u.phone || '-')}</td>
+      <td><span class="badge ${u.role === 'admin' ? 'badge-paid' : u.role === 'manager' ? 'badge-pending' : 'badge-unpaid'}">${roleLabel}</span></td>
+      <td>${unitName}</td>
+      <td style="font-size:12px;color:#888">${u.createdAt || '-'}</td>
+      <td>
+        <button class="btn btn-secondary" onclick="editUser(${u.id})" style="padding:4px 8px;font-size:12px">수정</button>
+        ${canDelete ? `<button class="btn btn-secondary" onclick="deleteUser(${u.id})" style="padding:4px 8px;font-size:12px">삭제</button>` : ''}
+      </td>
+    </tr>`
+  }).join('')
+}
+
+function editUser(id) {
+  const user = Store.getUsers().find(x => x.id === id)
+  if (user) showModal('user', user)
+}
+
+function deleteUser(id) {
+  if (!confirm('정말 삭제하시겠습니까?')) return
+  Store.deleteUser(id)
+  renderAll()
+}function updateStats() {
   const units = Store.getUnits()
   const bills = Store.getBills()
   const payments = Store.getPayments()
@@ -1121,10 +1163,37 @@ function showModal(type, editData) {
       `
       break
     }
+    case 'user': {
+      const isEdit = editData && editData.id
+      title.textContent = isEdit ? '사용자 수정' : '사용자 추가'
+      const units = Store.getUnits()
+      body.innerHTML = `
+        <div class="form-group"><label>아이디</label><input id="f-u-username" value="${editData ? esc(editData.username || '') : ''}" ${isEdit ? 'readonly style="background:#f5f5f5"' : ''}></div>
+        <div class="form-group"><label>비밀번호 ${isEdit ? '(비워두면 유지)' : '*'}</label><input id="f-u-pw" type="password" value=""></div>
+        <div class="form-group"><label>이름</label><input id="f-u-name" value="${editData ? esc(editData.name || '') : ''}"></div>
+        <div class="form-group"><label>이메일</label><input id="f-u-email" type="email" value="${editData ? esc(editData.email || '') : ''}"></div>
+        <div class="form-group"><label>연락처</label><input id="f-u-phone" value="${editData ? esc(editData.phone || '') : ''}"></div>
+        <div class="form-group"><label>권한</label><select id="f-u-role">
+          <option value="admin" ${editData && editData.role === 'admin' ? 'selected' : ''}>관리자</option>
+          <option value="manager" ${editData && editData.role === 'manager' ? 'selected' : ''}>매니저</option>
+          <option value="tenant" ${editData && editData.role === 'tenant' ? 'selected' : ''}>입주자</option>
+        </select></div>
+        <div class="form-group"><label>세대 (입주자)</label><select id="f-u-unit">
+          <option value="">선택 안함</option>
+          ${units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+        </select></div>
+        ${isEdit ? '' : `
+        <div class="form-group"><label>비밀번호 찾기 질문</label><select id="f-u-q">
+          <option value="가장 좋아하는 색깔은?">가장 좋아하는 색깔은?</option>
+          <option value="출신 초등학교 이름은?">출신 초등학교 이름은?</option>
+          <option value="가장 기억에 남는 여행지는?">가장 기억에 남는 여행지는?</option>
+        </select></div>
+        <div class="form-group"><label>비밀번호 찾기 답변</label><input id="f-u-a"></div>`}
+      `
+      break
+    }
   }
 }
-
-/** 보증금 차감 모달 - 세대 선택 시 연체 정보 업데이트 */
 function updateDeductionInfo() {
   const sel = document.getElementById('f-dd-unit')
   const info = document.getElementById('dd-info')
@@ -1326,6 +1395,34 @@ function saveModal() {
       }
       if (!data.title) return alert('제목을 입력하세요.')
       Store.addNotice(data)
+      break
+    }
+    case 'user': {
+      const isEdit = state.editingId
+      const username = document.getElementById('f-u-username').value.trim()
+      const pw = document.getElementById('f-u-pw').value
+      const name = document.getElementById('f-u-name').value.trim()
+      const email = document.getElementById('f-u-email').value.trim()
+      const phone = document.getElementById('f-u-phone').value.trim()
+      const role = document.getElementById('f-u-role').value
+      const unitId = parseInt(document.getElementById('f-u-unit').value) || null
+      if (!username) return alert('아이디를 입력하세요.')
+      if (!name) return alert('이름을 입력하세요.')
+      if (!isEdit) {
+        if (!pw || pw.length < 4) return alert('비밀번호는 4자리 이상 입력하세요.')
+        if (Store.getUsers().find(u => u.username === username)) return alert('이미 사용 중인 아이디입니다.')
+        const q = document.getElementById('f-u-q').value
+        const a = document.getElementById('f-u-a').value.trim()
+        Store.addUser({
+          username, password: btoa(pw), name, email, phone, role, unitId,
+          securityQuestion: q || '',
+          securityAnswer: a ? btoa(a) : '',
+        })
+      } else {
+        const data = { name, email, phone, role, unitId }
+        if (pw) data.password = btoa(pw)
+        Store.updateUser(state.editingId, data)
+      }
       break
     }
   }

@@ -11,7 +11,7 @@
     <aside id="sidebar">
       <div class="sidebar-header" onclick="goHome()" style="cursor:pointer">
         <h1>간석로1545</h1>
-        <p class="subtitle">관리자 시스템 v1.8.0</p>
+        <p class="subtitle">관리자 시스템 v1.9.0</p>
       </div>
       <nav id="nav">
         <ul>
@@ -21,6 +21,7 @@
           <li><a href="#" data-page="billing">📄 청구서 생성</a></li>
           <li><a href="#" data-page="payment">💰 수납/미수금</a></li>
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
+          <li><a href="#" data-page="settings" style="display:none">⚙️ 설정</a></li>
         </ul>
       </nav>
       <button class="sidebar-close" onclick="toggleSidebar()" title="사이드바 닫기">&larr;</button>
@@ -297,6 +298,24 @@
                 <tr><td colspan="4">공지가 없습니다.</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div id="page-settings" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>사용자 관리</h3>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="text" id="user-search" placeholder="이름 / 아이디 검색..." oninput="renderUsers()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                <button class="btn btn-primary" onclick="showModal('user')">+ 사용자 추가</button>
+              </div>
+            </div>
+            <div class="table-wrap"><table class="table-dense">
+              <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>연락처</th><th>권한</th><th>세대</th><th>가입일</th><th>관리</th></tr></thead>
+              <tbody id="user-tbody">
+                <tr><td colspan="8">등록된 사용자가 없습니다.</td></tr>
+              </tbody>
+            </table></div>
           </div>
         </div>
       </section>
