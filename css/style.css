@@ -1,6 +1,6 @@
 /*
  * style.css — 건물 관리 시스템 스타일시트
- * 간석로1545 관리자 시스템 v1.5.0
+ * 간석로1545 관리자 시스템 v1.6.0
  */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -53,10 +53,11 @@ body {
 #content { flex: 1; padding: 24px; overflow-y: auto; }
 
 /* Stats */
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px; }
 .stat-card {
   background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
+.stat-card.stat-danger .stat-value { color: #c5221f; }
 .stat-label { font-size: 13px; color: #888; display: block; margin-bottom: 6px; }
 .stat-value { font-size: 24px; font-weight: 700; color: #1a73e8; }
 
@@ -130,6 +131,7 @@ tr:hover { background: #fafbfc; }
 .badge-paid { background: #e6f4ea; color: #137333; }
 .badge-unpaid { background: #fce8e6; color: #c5221f; }
 .badge-pending { background: #fef7e0; color: #b06000; }
+.badge-danger { background: #c5221f; color: #fff; }
 
 /* Tabs */
 .tabs { display: flex; gap: 0; margin-bottom: 0; background: #fff; border-radius: 8px 8px 0 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }

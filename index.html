@@ -54,6 +54,14 @@
               <span class="stat-label">미납 세대</span>
               <span class="stat-value" id="stat-unpaid">0</span>
             </div>
+            <div class="stat-card stat-danger">
+              <span class="stat-label">연체 30일+</span>
+              <span class="stat-value" id="stat-overdue30">0</span>
+            </div>
+            <div class="stat-card stat-danger">
+              <span class="stat-label">연체 60일+</span>
+              <span class="stat-value" id="stat-overdue60">0</span>
+            </div>
           </div>
           <div class="card">
             <h3>계약 현황 <span id="dashboard-date" style="font-weight:400;font-size:13px;color:#888;margin-left:8px"></span></h3>
@@ -204,7 +212,7 @@
               </div>
               <table>
                 <thead>
-                  <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>상태</th></tr>
+                  <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>연체정보</th><th>관리</th></tr>
               </thead>
               <tbody id="payment-tbody">
                 <tr><td colspan="7">수납 내역이 없습니다.</td></tr>

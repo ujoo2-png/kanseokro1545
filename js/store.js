@@ -1,6 +1,6 @@
 /*
  * store.js — localStorage 기반 데이터 저장소
- * 간석로1545 관리자 시스템 v1.5.0
+ * 간석로1545 관리자 시스템 v1.6.0
  * 모든 데이터는 브라우저 localStorage('kanseokro1545_data')에 JSON 직렬화/역직렬화
  */
 
@@ -121,6 +121,40 @@ const Store = {
   getPayments() { return this._data.payments },
   /** 수납 등록 */
   addPayment(p) { this._data.payments.push({ id: Date.now(), ...p }); this.save() },
+  /** 수납 삭제 */
+  deletePayment(id) {
+    this._data.payments = this._data.payments.filter(p => p.id !== id)
+    this.save()
+  },
+  /**
+   * 특정 청구건의 총 납부액 계산
+   * @param {number} billId
+   * @returns {number}
+   */
+  getPaidTotal(billId) {
+    return this._data.payments.filter(p => p.billId === billId).reduce((s, p) => s + p.amount, 0)
+  },
+  /**
+   * 미납/부분납 청구 목록 (연체일 계산 포함)
+   * @param {number} [unitId] - 특정 세대 필터
+   * @returns {Array} { bill, paid, unpaid, overdueDays }
+   */
+  getOverdueBills(unitId) {
+    const today = new Date()
+    const bills = this._data.bills.filter(b => {
+      if (b.status === 'paid') return false
+      if (unitId && b.unitId !== unitId) return false
+      return true
+    })
+    return bills.map(b => {
+      const paid = this.getPaidTotal(b.id)
+      const unpaid = b.total - paid
+      const dueDate = b.yearMonth + '-' + String(b.dueDate || 10).padStart(2, '0')
+      const due = new Date(dueDate + 'T23:59:59')
+      const overdueDays = Math.max(0, Math.floor((today - due) / (1000 * 60 * 60 * 24)))
+      return { bill: b, paid, unpaid, overdueDays }
+    }).filter(item => item.unpaid > 0)
+  },
 
   // Notices
   /** @returns {Array} 공지 목록 */

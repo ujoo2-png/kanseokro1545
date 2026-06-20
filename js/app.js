@@ -1,8 +1,9 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.5.0
+ * 간석로1545 관리자 시스템 v1.6.0
  *
  * 히스토리
+ * v1.6.0 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드, 세대-청구건 불일치 방지
  * v1.5.0 (2026-06) 검색필터 전메뉴 적용, 엔티티명 클릭 상세보기, A6 명세서 출력, 정합성검토+검침누락, 세대명굵게, 검침량감소체크
  * v1.4.0 (2026-06) 청구 재생성 버그 수정, 사용량/복지필드 저장, TV수신료, 검침 날짜정렬
  * v1.3.0 (2026-06) 복지할인, 한국 전기/수도 누진제 요금 계산 엔진
@@ -62,6 +63,17 @@ function calcWater(m3) {
 /** 복지할인 대상의 한글 라벨 반환 */
 function welfareLabel(w) {
   return WELFARE[w] ? WELFARE[w].label : '해당없음'
+}
+
+/**
+ * 연체료 계산 (일할: 미납액의 1% × 연체월수)
+ * @param {number} unpaidAmount - 미납 금액
+ * @param {number} overdueMonths - 연체 개월 수
+ * @returns {number}
+ */
+function calcLateFee(unpaidAmount, overdueMonths) {
+  if (overdueMonths <= 0 || unpaidAmount <= 0) return 0
+  return Math.round(unpaidAmount * 0.01 * Math.min(overdueMonths, 12))
 }
 
 /** 사이드바 제목 클릭 시 대시보드로 이동 */
@@ -353,15 +365,18 @@ function renderPayments() {
     })
   }
   if (!payments.length) {
-    tbody.innerHTML = '<tr><td colspan="7">수납 내역이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="8">수납 내역이 없습니다.</td></tr>'
     return
   }
+  payments.sort((a, b) => b.date.localeCompare(a.date) || (b.id - a.id))
   tbody.innerHTML = payments.map(p => {
     const unit = Store.getUnits().find(u => u.id === p.unitId)
     const bill = Store.getBills().find(b => b.id === p.billId)
     const unpaid = bill ? bill.total - p.amount : 0
     const badge = unpaid <= 0 ? 'badge-paid' : unpaid >= bill.total ? 'badge-unpaid' : 'badge-pending'
     const label = unpaid <= 0 ? '완납' : unpaid >= bill.total ? '미납' : '부분납'
+    const overdue = Store.getOverdueBills(p.unitId).find(o => o.bill.id === p.billId)
+    const ob = overdue && overdue.overdueDays > 0 ? overdueBadge(overdue.overdueDays) : null
     return `<tr>
       <td><a href="#" onclick="showBillDetail(${bill ? bill.id : 0});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${bill ? bill.yearMonth : '-'}</td>
@@ -369,9 +384,27 @@ function renderPayments() {
       <td>${fmt(p.amount)}</td>
       <td>${fmt(unpaid)}</td>
       <td>${p.date}</td>
-      <td><span class="badge ${badge}">${label}</span></td>
+      <td>${ob ? `<span class="badge ${ob.cls}">${ob.label}</span>` : `<span class="badge ${badge}">${label}</span>`}</td>
+      <td><button class="btn btn-secondary" onclick="deletePayment(${p.id})" style="padding:4px 8px;font-size:12px">삭제</button></td>
     </tr>`
   }).join('')
+}
+
+/** 수납 삭제 → 해당 청구 상태 재계산 */
+function deletePayment(id) {
+  if (!confirm('입금 기록을 삭제하시겠습니까?')) return
+  const p = Store.getPayments().find(py => py.id === id)
+  if (!p) return
+  Store.deletePayment(id)
+  const bill = Store.getBills().find(b => b.id === p.billId)
+  if (bill) {
+    const totalPaid = Store.getPaidTotal(bill.id)
+    if (totalPaid >= bill.total) Store.updateBill(bill.id, { status: 'paid' })
+    else if (totalPaid > 0) Store.updateBill(bill.id, { status: 'pending' })
+    else Store.updateBill(bill.id, { status: 'unpaid' })
+  }
+  renderAll()
+  updateStats()
 }
 
 function renderNotices() {
@@ -424,6 +457,12 @@ function updateStats() {
   document.getElementById('stat-arrears').textContent = fmt(totalBilling - totalPaid)
   const unpaid = bills.filter(b => b.status !== 'paid').length
   document.getElementById('stat-unpaid').textContent = unpaid
+
+  const overdue = Store.getOverdueBills()
+  const overdue30 = overdue.filter(o => o.overdueDays >= 30 && o.overdueDays < 60).length
+  const overdue60 = overdue.filter(o => o.overdueDays >= 60).length
+  document.getElementById('stat-overdue30').textContent = overdue30
+  document.getElementById('stat-overdue60').textContent = overdue60
 }
 
 /* Dashboard - contract status — 대시보드 세대별 계약현황 테이블 */
@@ -588,7 +627,6 @@ function showModal(type, editData) {
     }
     case 'payment': {
       const units = Store.getUnits()
-      const bills = Store.getBills().filter(b => b.status !== 'paid')
       title.textContent = '입금 등록'
       body.innerHTML = `
         <div class="form-group"><label>세대</label><select id="f-punit">${
@@ -602,10 +640,16 @@ function showModal(type, editData) {
         const uid = parseInt(document.getElementById('f-punit').value)
         const sel = document.getElementById('f-pbill')
         const filtered = Store.getBills().filter(b => b.unitId === uid && b.status !== 'paid')
-        sel.innerHTML = filtered.map(b => `<option value="${b.id}">${b.yearMonth} - ${fmt(b.total)}원</option>`).join('')
+        if (filtered.length === 0) {
+          sel.innerHTML = '<option value="">미납 청구건이 없습니다</option>'
+          return
+        }
+        sel.innerHTML = filtered.map(b => `<option value="${b.id}">${b.yearMonth} - ${fmt(b.total)}원 (잔여 ${fmt(Store.getPaidTotal(b.id) > 0 ? b.total - Store.getPaidTotal(b.id) : b.total)})</option>`).join('')
       }
-      document.getElementById('f-punit').addEventListener('change', updateBillOptions)
-      setTimeout(updateBillOptions, 0)
+      setTimeout(() => {
+        document.getElementById('f-punit').addEventListener('change', updateBillOptions)
+        updateBillOptions()
+      }, 0)
       break
     }
     case 'bill-detail': {
@@ -805,14 +849,19 @@ function saveModal() {
     }
     case 'payment': {
       const billId = parseInt(document.getElementById('f-pbill').value)
+      const selectedUnitId = parseInt(document.getElementById('f-punit').value)
       const bill = Store.getBills().find(b => b.id === billId)
       if (!bill) return alert('청구건을 선택하세요.')
+      if (bill.unitId !== selectedUnitId) {
+        return alert('선택한 세대와 청구건의 세대가 일치하지 않습니다. 다시 선택해주세요.')
+      }
       const data = {
-        unitId: parseInt(document.getElementById('f-punit').value),
+        unitId: selectedUnitId,
         billId,
         amount: parseInt(document.getElementById('f-pamount').value.replace(/,/g, '')) || 0,
         date: document.getElementById('f-pdate').value,
       }
+      if (data.amount <= 0) return alert('납부액을 입력하세요.')
       Store.addPayment(data)
       const totalPaid = Store.getPayments().filter(p => p.billId === billId).reduce((s, p) => s + p.amount, 0)
       if (totalPaid >= bill.total) Store.updateBill(billId, { status: 'paid' })
@@ -922,6 +971,7 @@ function generateBills() {
   const commonInput = prompt('세대당 공용관리비를 입력하세요 (원, 0이면 미부과):', '0')
   if (commonInput === null) return
   const commonFeePerUnit = parseInt(commonInput) || 0
+  const prevYm = getPrevYearMonth(ym)
   for (const u of activeUnits) {
     const contract = Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
     const rent = contract ? contract.rent : 0
@@ -944,8 +994,19 @@ function generateBills() {
     const elecAfter = Math.max(0, elecCost - elecDiscount)
     const waterAfter = waterCost * (1 - waterDiscountPct)
     const tvFee = 2500
-    const late = 0
     const commonFee = commonFeePerUnit
+
+    const prevBill = Store.getBills().find(b => b.unitId === u.id && b.yearMonth === prevYm)
+    let late = 0
+    if (prevBill && prevBill.status === 'unpaid') {
+      const paidOnPrev = Store.getPaidTotal(prevBill.id)
+      const unpaidPrev = prevBill.total - paidOnPrev
+      if (unpaidPrev > 0) {
+        const overdueMonths = 1
+        late = calcLateFee(unpaidPrev, overdueMonths)
+      }
+    }
+
     const total = rent + maintenanceFee + Math.round(elecAfter) + Math.round(waterAfter) + commonFee + tvFee + late
     Store.addBill({
       unitId: u.id,
@@ -1116,6 +1177,21 @@ function yn(v) {
 /** 숫자를 천단위 콤마 문자열로 포맷 (단위 없음) */
 function fm(n) {
   return (n || 0).toLocaleString()
+}
+
+/** 'YYYY-MM' 형식의 이전 달 반환 */
+function getPrevYearMonth(ym) {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m - 2, 1)
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+}
+
+/** 연체일수에 따른 배지 클래스와 라벨 */
+function overdueBadge(days) {
+  if (days <= 0) return { cls: 'badge-paid', label: '정상' }
+  if (days <= 30) return { cls: 'badge-pending', label: days + '일 연체' }
+  if (days <= 60) return { cls: 'badge-unpaid', label: days + '일 연체' }
+  return { cls: 'badge-danger', label: days + '일 연체 (심각)' }
 }
 
 init()
