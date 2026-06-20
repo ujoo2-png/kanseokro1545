@@ -183,19 +183,6 @@ function switchAuthTab(tab) {
           <div><label style="font-size:12px;color:#888">이름 *</label><input id="af-reg-name" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
           <div><label style="font-size:12px;color:#888">이메일 * (아이디/비번 찾기에 사용)</label><input id="af-reg-email" type="email" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
           <div><label style="font-size:12px;color:#888">연락처</label><input id="af-reg-phone" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
-          <div><label style="font-size:12px;color:#888">권한</label>
-            <select id="af-reg-role" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-              <option value="admin">관리자</option>
-              <option value="manager">매니저</option>
-              <option value="tenant" selected>입주자</option>
-            </select>
-          </div>
-          <div id="af-reg-unit-group" style="display:none"><label style="font-size:12px;color:#888">세대 (입주자 선택 시)</label>
-            <select id="af-reg-unit" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-              <option value="">선택 안함</option>
-              ${Store.getUnits().map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
-            </select>
-          </div>
           <div><label style="font-size:12px;color:#888">비밀번호 찾기 질문 *</label>
             <select id="af-reg-q" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
               <option value="가장 좋아하는 색깔은?">가장 좋아하는 색깔은?</option>
@@ -251,9 +238,7 @@ function switchAuthTab(tab) {
   if (!html) return
   container.innerHTML = html
   if (tab === 'register') {
-    document.getElementById('af-reg-role').onchange = () => {
-      document.getElementById('af-reg-unit-group').style.display = document.getElementById('af-reg-role').value === 'tenant' ? 'block' : 'none'
-    }
+    // register form has no special handlers now
   }
 }
 
@@ -278,8 +263,6 @@ function doRegister() {
   const name = document.getElementById('af-reg-name').value.trim()
   const email = document.getElementById('af-reg-email').value.trim()
   const phone = document.getElementById('af-reg-phone').value.trim()
-  const role = document.getElementById('af-reg-role').value
-  const unitId = parseInt(document.getElementById('af-reg-unit')?.value) || null
   const q = document.getElementById('af-reg-q').value
   const a = document.getElementById('af-reg-a').value.trim()
   const err = document.getElementById('af-reg-err')
@@ -289,7 +272,7 @@ function doRegister() {
   if (!name) { err.textContent = '이름을 입력하세요.'; err.style.display = 'block'; return }
   if (!email) { err.textContent = '이메일을 입력하세요.'; err.style.display = 'block'; return }
   if (!a) { err.textContent = '비밀번호 찾기 답변을 입력하세요.'; err.style.display = 'block'; return }
-  const r = register({ username: id, password: pw, name, email, phone, role, unitId, securityQuestion: q, securityAnswer: a })
+  const r = register({ username: id, password: pw, name, email, phone, role: 'tenant', unitId: null, securityQuestion: q, securityAnswer: a })
   if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
   err.style.display = 'none'
   switchAuthTab('login')
