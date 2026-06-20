@@ -162,6 +162,11 @@ tr:hover { background: #fafbfc; }
 }
 #modal-header:active { cursor: grabbing; }
 
+/* Scrollable table wrapper for dense tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap table { min-width: 900px; }
+.table-dense th, .table-dense td { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+
 /* Page visibility */
 .page { display: none; }
 .page.active { display: block; }

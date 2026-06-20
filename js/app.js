@@ -1,8 +1,9 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.7.0
+ * 간석로1545 관리자 시스템 v1.8.0
  *
  * 히스토리
+ * v1.8.0 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * v1.7.0 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
  * v1.6.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * v1.6.4 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
@@ -126,11 +127,21 @@ function restorePageState() {
 }
 
 /** 앱 초기화 — Store 로드 → 네비게이션/모달/사이드바 설정 → 전체 렌더 + 통계 갱신 */
-function init() {
+async function init() {
   Store.init()
   setupNavigation()
   setupDraggableModal()
   setupSidebar()
+  const sb = getSupabase()
+  if (sb) {
+    const user = await checkAuth()
+    document.getElementById('login-btn-top').style.display = user ? 'none' : 'inline-block'
+    document.getElementById('logout-btn-top').style.display = user ? 'inline-block' : 'none'
+    onAuthChange(u => {
+      document.getElementById('login-btn-top').style.display = u ? 'none' : 'inline-block'
+      document.getElementById('logout-btn-top').style.display = u ? 'inline-block' : 'none'
+    })
+  }
   restorePageState()
   renderAll()
   updateStats()
@@ -266,7 +277,7 @@ function renderContracts() {
     })
   }
   if (!contracts.length) {
-    tbody.innerHTML = '<tr><td colspan="16">등록된 계약이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="17">등록된 계약이 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = contracts.map(c => {
@@ -274,6 +285,7 @@ function renderContracts() {
     const badge = c.status === 'active' ? 'badge-paid' : 'badge-unpaid'
     const label = c.status === 'active' ? '진행중' : '종료'
     const activeClass = c.status === 'active' ? 'row-active' : ''
+    const hasFile = c.fileName && c.fileData
     return `<tr class="${activeClass}">
       <td>${unit ? `<a href="#" onclick="editContract(${c.id});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit.name}</a>` : '알 수 없음'}</td>
       <td>${c.tenant || '-'}</td>
@@ -289,6 +301,7 @@ function renderContracts() {
       <td>${c.accountNumber || '-'}</td>
       <td>${c.accountHolder || '-'}</td>
       <td>${welfareLabel(c.welfare)}</td>
+      <td>${hasFile ? `<a href="#" onclick="previewContractFile(${c.id});return false" style="color:#1a73e8;text-decoration:none;font-size:12px" title="${esc(c.fileName)}">📎 ${esc(c.fileName)}</a>` : '-'}</td>
       <td><span class="badge ${badge}">${label}</span></td>
       <td>
         <button class="btn btn-secondary" onclick="editContract(${c.id})" style="padding:4px 8px;font-size:12px">수정</button>
@@ -682,13 +695,87 @@ function renderDashboardContracts() {
     const period = contract ? (contract.contractStart || '-') + ' ~ ' + (contract.contractEnd || '-') : '-'
     const badge = contract && contract.status === 'active' ? 'badge-paid' : 'badge-unpaid'
     const label = contract && contract.status === 'active' ? '계약중' : '계약없음'
+    let until = ''
+    if (contract && contract.contractEnd && contract.status === 'active') {
+      const end = new Date(contract.contractEnd + 'T23:59:59')
+      const now = new Date()
+      const diff = end - now
+      if (diff > 0) {
+        const totalDays = Math.ceil(diff / (1000 * 60 * 60 * 24))
+        const months = Math.floor(totalDays / 30)
+        const days = totalDays % 30
+        const cls = totalDays <= 30 ? 'badge-unpaid' : totalDays <= 90 ? 'badge-pending' : ''
+        until = `<span class="badge ${cls}">${months}개월 ${days}일</span>`
+      } else {
+        until = `<span class="badge badge-unpaid">만료</span>`
+      }
+    } else {
+      until = '-'
+    }
     return `<tr>
       <td>${u.name}</td>
       <td>${bld ? bld.name : '-'}</td>
       <td>${period}</td>
+      <td>${until}</td>
       <td><span class="badge ${badge}">${label}</span></td>
     </tr>`
   }).join('')
+
+  renderExpiringContracts()
+}
+
+function renderExpiringContracts() {
+  const container = document.getElementById('expiring-content')
+  const today = new Date()
+  const contracts = Store.getContracts().filter(c => c.contractEnd && c.status === 'active')
+  const units = Store.getUnits()
+
+  const groups = { '1': [], '3': [], '6': [] }
+  const thresholds = { '1': 30, '3': 90, '6': 180 }
+
+  for (const c of contracts) {
+    const end = new Date(c.contractEnd + 'T23:59:59')
+    const daysLeft = Math.floor((end - today) / (1000 * 60 * 60 * 24))
+    if (daysLeft < 0) continue
+    if (daysLeft <= thresholds['1']) groups['1'].push({ c, daysLeft })
+    else if (daysLeft <= thresholds['3']) groups['3'].push({ c, daysLeft })
+    else if (daysLeft <= thresholds['6']) groups['6'].push({ c, daysLeft })
+  }
+
+  const colMeta = {
+    '1': { label: '1개월 이내', color: '#d32f2f', bg: '#fbe9e7', dot: '#d32f2f' },
+    '3': { label: '3개월 이내', color: '#e65100', bg: '#fff3e0', dot: '#e65100' },
+    '6': { label: '6개월 이내', color: '#1565c0', bg: '#e3f2fd', dot: '#1565c0' },
+  }
+
+  const total = Object.values(groups).reduce((s, g) => s + g.length, 0)
+  if (!total) {
+    container.innerHTML = '<div style="padding:14px;color:#999;font-size:13px;text-align:center">만료 예정 계약이 없습니다.</div>'
+    return
+  }
+
+  let html = '<div style="display:flex;gap:12px;align-items:stretch;padding:4px 16px 16px">'
+  for (const key of ['1', '3', '6']) {
+    const m = colMeta[key]
+    const items = groups[key]
+    html += `<div style="flex:1;min-width:0;background:${m.bg};border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px">`
+    html += `<div style="font-size:13px;font-weight:600;color:${m.color};padding-bottom:6px;border-bottom:2px solid ${m.dot}33;display:flex;justify-content:space-between">${m.label} <span style="background:${m.dot};color:#fff;border-radius:10px;padding:0 8px;font-size:11px;line-height:20px">${items.length}</span></div>`
+    if (!items.length) {
+      html += `<div style="font-size:12px;color:#999;padding:10px 0;text-align:center">-</div>`
+    } else {
+      for (const { c, daysLeft } of items) {
+        const unit = units.find(u => u.id === c.unitId)
+        html += `<div style="background:#fff;border-radius:6px;padding:8px 10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:13px;border-left:3px solid ${m.dot}">`
+        html += `<div style="font-weight:600;margin-bottom:2px">${esc(unit ? unit.name : '?')}</div>`
+        html += `<div style="font-size:12px;color:#666">${c.contractEnd}</div>`
+        html += `<div style="margin-top:4px"><span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${m.color};background:${m.dot}18">D-${daysLeft}</span></div>`
+        html += `</div>`
+      }
+    }
+    html += `</div>`
+  }
+  html += '</div>'
+  container.innerHTML = html
 }
 
 /* Draggable modal */
@@ -806,6 +893,15 @@ function showModal(type, editData) {
         <div class="form-group"><label>납부일</label><input id="f-cduedate" type="number" value="${editData ? editData.dueDate || 10 : 10}"></div>
         <div class="form-group"><label>계약 시작</label><input id="f-cstart" type="date" value="${editData ? editData.contractStart || '' : ''}"></div>
         <div class="form-group"><label>계약 종료</label><input id="f-cend" type="date" value="${editData ? editData.contractEnd || '' : ''}"></div>
+        <div class="form-group" style="border-top:1px solid #eee;padding-top:10px;margin-top:6px">
+          <label>계약서 파일</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="f-cfile" type="file" accept=".pdf,.jpg,.jpeg,.png" style="font-size:13px;flex:1;min-width:0">
+            ${editData && editData.fileName ? `<span style="font-size:12px;color:#666">📎 ${esc(editData.fileName)}</span>
+            <button type="button" class="btn btn-secondary" onclick="previewContractFile(${editData.id})" style="font-size:11px;padding:3px 8px">미리보기</button>
+            <button type="button" class="btn btn-secondary" onclick="removeContractFile(${editData.id})" style="font-size:11px;padding:3px 8px">파일삭제</button>` : ''}
+          </div>
+        </div>
         <div class="form-group"><label>상태</label><select id="f-cstatus">
           <option value="active" ${editData && editData.status === 'active' ? 'selected' : ''}>진행중</option>
           <option value="ended" ${editData && editData.status === 'ended' ? 'selected' : ''}>종료</option>
@@ -1091,6 +1187,7 @@ function saveModal() {
       break
     }
     case 'contract': {
+      const fileInput = document.getElementById('f-cfile')
       const data = {
         unitId: parseInt(document.getElementById('f-cunit').value),
         tenant: document.getElementById('f-ctenant').value.trim(),
@@ -1111,6 +1208,23 @@ function saveModal() {
         contractEnd: document.getElementById('f-cend').value,
         status: document.getElementById('f-cstatus').value,
       }
+      if (fileInput && fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0]
+        if (file.size > 10 * 1024 * 1024) return alert('파일 크기는 10MB 이하여야 합니다.')
+        const reader = new FileReader()
+        reader.onload = function (e) {
+          data.fileName = file.name
+          data.fileType = file.type
+          data.fileData = e.target.result
+          if (state.editingId) Store.updateContract(state.editingId, data)
+          else Store.addContract(data)
+          closeModal()
+          renderAll()
+        }
+        reader.readAsDataURL(file)
+        return
+      }
+      // 파일 변경이 없으면 기존 파일 유지 (editing 시)
       if (state.editingId) Store.updateContract(state.editingId, data)
       else Store.addContract(data)
       break
@@ -1257,6 +1371,26 @@ function deleteUnit(id) {
 function deleteContract(id) {
   if (!confirm('정말 삭제하시겠습니까?')) return
   Store.deleteContract(id)
+  renderAll()
+}
+
+function previewContractFile(id) {
+  const c = Store.getContracts().find(x => x.id === id)
+  if (!c || !c.fileData) return alert('첨부 파일이 없습니다.')
+  const w = window.open('', '_blank')
+  w.document.write(`<html><head><title>${c.fileName}</title><style>body{margin:0;display:flex;justify-content:center;background:#eee}iframe{width:100%;height:100vh;border:none}</style></head><body>`)
+  if (c.fileType && c.fileType.startsWith('image/')) {
+    w.document.write(`<img src="${c.fileData}" style="max-width:100%;max-height:100vh;object-fit:contain">`)
+  } else {
+    w.document.write(`<iframe src="${c.fileData}"></iframe>`)
+  }
+  w.document.write('</body></html>')
+  w.document.close()
+}
+
+function removeContractFile(id) {
+  if (!confirm('첨부 파일을 삭제하시겠습니까?')) return
+  Store.updateContract(id, { fileName: undefined, fileType: undefined, fileData: undefined })
   renderAll()
 }
 
