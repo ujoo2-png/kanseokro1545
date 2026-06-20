@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>간석로1545 - 관리자</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h1>간석로1545</h1>
+        <p class="subtitle">관리자 시스템</p>
+      </div>
+      <nav id="nav">
+        <ul>
+          <li><a href="#" class="active" data-page="dashboard">🏠 대시보드</a></li>
+          <li><a href="#" data-page="building">🏢 건물/세대/계약</a></li>
+          <li><a href="#" data-page="meter">📊 검침 입력</a></li>
+          <li><a href="#" data-page="billing">📄 청구서 생성</a></li>
+          <li><a href="#" data-page="payment">💰 수납/미수금</a></li>
+          <li><a href="#" data-page="notice">📢 공지 발송</a></li>
+        </ul>
+      </nav>
+    </aside>
+    <main id="main">
+      <header id="topbar">
+        <h2 id="page-title">대시보드</h2>
+        <div class="topbar-right">
+          <span id="user-info">관리자</span>
+        </div>
+      </header>
+      <section id="content">
+        <div id="page-dashboard" class="page active">
+          <div class="stats">
+            <div class="stat-card">
+              <span class="stat-label">전체 세대</span>
+              <span class="stat-value" id="stat-units">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">이번 달 청구</span>
+              <span class="stat-value" id="stat-billing">0원</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">미수금</span>
+              <span class="stat-value" id="stat-arrears">0원</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">미납 세대</span>
+              <span class="stat-value" id="stat-unpaid">0</span>
+            </div>
+          </div>
+          <div class="card">
+            <h3>최근 활동</h3>
+            <table id="recent-table">
+              <thead>
+                <tr><th>일시</th><th>내용</th><th>상태</th></tr>
+              </thead>
+              <tbody id="recent-tbody">
+                <tr><td colspan="3">데이터가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="page-building" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>건물/세대/계약 관리</h3>
+              <button class="btn btn-primary" onclick="showModal('building')">+ 추가</button>
+            </div>
+            <table>
+              <thead>
+                <tr><th>세대</th><th>세입자</th><th>계약기간</th><th>월세</th><th>관리비</th><th>관리</th></tr>
+              </thead>
+              <tbody id="building-tbody">
+                <tr><td colspan="6">등록된 세대가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="page-meter" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>검침 입력</h3>
+              <button class="btn btn-primary" onclick="showModal('meter')">+ 검침 입력</button>
+            </div>
+            <table>
+              <thead>
+                <tr><th>세대</th><th>검침일</th><th>전기(kWh)</th><th>수도(m³)</th><th>관리</th></tr>
+              </thead>
+              <tbody id="meter-tbody">
+                <tr><td colspan="5">검침 데이터가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="page-billing" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>청구서 생성</h3>
+              <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
+            </div>
+            <table>
+              <thead>
+                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>공용</th><th>연체료</th><th>합계</th><th>납부상태</th></tr>
+              </thead>
+              <tbody id="billing-tbody">
+                <tr><td colspan="10">청구 내역이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="page-payment" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>수납/미수금 관리</h3>
+              <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
+            </div>
+            <table>
+              <thead>
+                <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>상태</th></tr>
+              </thead>
+              <tbody id="payment-tbody">
+                <tr><td colspan="7">수납 내역이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="page-notice" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>공지 발송</h3>
+              <button class="btn btn-primary" onclick="showModal('notice')">+ 공지 작성</button>
+            </div>
+            <table>
+              <thead>
+                <tr><th>제목</th><th>작성일</th><th>발송상태</th><th>관리</th></tr>
+              </thead>
+              <tbody id="notice-tbody">
+                <tr><td colspan="4">공지가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-overlay" class="hidden" onclick="closeModal(event)">
+    <div id="modal" onclick="event.stopPropagation()">
+      <div id="modal-header">
+        <h3 id="modal-title">제목</h3>
+        <button class="btn-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="modal-body"></div>
+      <div id="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+        <button class="btn btn-primary" id="modal-save" onclick="saveModal()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
