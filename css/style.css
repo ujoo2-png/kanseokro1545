@@ -105,6 +105,12 @@ tr:hover { background: #fafbfc; }
 .badge-unpaid { background: #fce8e6; color: #c5221f; }
 .badge-pending { background: #fef7e0; color: #b06000; }
 
+/* Sidebar footer */
+.sidebar-footer {
+  margin-top: auto; padding: 12px 20px; border-top: 1px solid #eee;
+  font-size: 11px; color: #bbb; text-align: center;
+}
+
 /* Page visibility */
 .page { display: none; }
 .page.active { display: block; }

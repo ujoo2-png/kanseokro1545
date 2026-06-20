@@ -34,15 +34,24 @@ function renderAll() {
 
 function renderUnits() {
   const tbody = document.getElementById('building-tbody')
-  const units = Store.getUnits()
+  let units = Store.getUnits()
+  const q = (document.getElementById('building-search')?.value || '').toLowerCase()
+  if (q) {
+    units = units.filter(u =>
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.tenant || '').toLowerCase().includes(q) ||
+      (u.phone || '').includes(q)
+    )
+  }
   if (!units.length) {
-    tbody.innerHTML = '<tr><td colspan="6">등록된 세대가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7">등록된 세대가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = units.map(u => `
     <tr>
       <td>${u.name}</td>
       <td>${u.tenant || '-'}</td>
+      <td>${u.phone || '-'}</td>
       <td>${u.contractStart || '-'} ~ ${u.contractEnd || '-'}</td>
       <td>${fmt(u.rent)}</td>
       <td>${fmt(u.maintenanceFee)}</td>
@@ -189,6 +198,9 @@ function showModal(type, editData) {
       body.innerHTML = `
         <div class="form-group"><label>세대명 (예: 101호)</label><input id="f-name" value="${editData ? editData.name : ''}"></div>
         <div class="form-group"><label>세입자명</label><input id="f-tenant" value="${editData ? editData.tenant || '' : ''}"></div>
+        <div class="form-group"><label>연락처</label><input id="f-phone" value="${editData ? editData.phone || '' : ''}"></div>
+        <div class="form-group"><label>이메일</label><input id="f-email" type="email" value="${editData ? editData.email || '' : ''}"></div>
+        <div class="form-group"><label>비상연락처</label><input id="f-emergency" value="${editData ? editData.emergency || '' : ''}"></div>
         <div class="form-group"><label>월세</label><input id="f-rent" type="number" value="${editData ? editData.rent : ''}"></div>
         <div class="form-group"><label>관리비</label><input id="f-mfee" type="number" value="${editData ? editData.maintenanceFee : ''}"></div>
         <div class="form-group"><label>보증금</label><input id="f-deposit" type="number" value="${editData ? editData.deposit || '' : ''}"></div>
@@ -260,6 +272,9 @@ function saveModal() {
       const data = {
         name: document.getElementById('f-name').value.trim(),
         tenant: document.getElementById('f-tenant').value.trim(),
+        phone: document.getElementById('f-phone').value.trim(),
+        email: document.getElementById('f-email').value.trim(),
+        emergency: document.getElementById('f-emergency').value.trim(),
         rent: parseInt(document.getElementById('f-rent').value) || 0,
         maintenanceFee: parseInt(document.getElementById('f-mfee').value) || 0,
         deposit: parseInt(document.getElementById('f-deposit').value) || 0,

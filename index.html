@@ -23,6 +23,7 @@
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
         </ul>
       </nav>
+      <div class="sidebar-footer">v1.1.0</div>
     </aside>
     <main id="main">
       <header id="topbar">
@@ -68,14 +69,17 @@
           <div class="card">
             <div class="card-header">
               <h3>건물/세대/계약 관리</h3>
-              <button class="btn btn-primary" onclick="showModal('building')">+ 추가</button>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="text" id="building-search" placeholder="세대명 / 세입자 / 연락처 검색..." oninput="renderUnits()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                <button class="btn btn-primary" onclick="showModal('building')">+ 추가</button>
+              </div>
             </div>
             <table>
               <thead>
-                <tr><th>세대</th><th>세입자</th><th>계약기간</th><th>월세</th><th>관리비</th><th>관리</th></tr>
+                <tr><th>세대</th><th>세입자</th><th>연락처</th><th>계약기간</th><th>월세</th><th>관리비</th><th>관리</th></tr>
               </thead>
               <tbody id="building-tbody">
-                <tr><td colspan="6">등록된 세대가 없습니다.</td></tr>
+                <tr><td colspan="7">등록된 세대가 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
