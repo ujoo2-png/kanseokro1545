@@ -3,6 +3,7 @@ let state = { currentModal: null, editingId: null }
 function init() {
   Store.init()
   setupNavigation()
+  setupDraggableModal()
   renderAll()
   updateStats()
 }
@@ -18,13 +19,25 @@ function setupNavigation() {
       const page = document.getElementById('page-' + a.dataset.page)
       if (page) page.classList.add('active')
       document.getElementById('page-title').textContent = a.textContent.trim()
+      const tab = document.querySelector('#page-building .tab.active')
+      if (tab) switchBuildingTab(tab.dataset.tab)
     })
   })
 }
 
+/* Building page tabs */
+function switchBuildingTab(tabId) {
+  document.querySelectorAll('#page-building .tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('#page-building .tab-content').forEach(c => c.classList.remove('active'))
+  document.querySelector(`#page-building .tab[data-tab="${tabId}"]`).classList.add('active')
+  document.getElementById(tabId).classList.add('active')
+}
+
 /* Render */
 function renderAll() {
+  renderBuildings()
   renderUnits()
+  renderContracts()
   renderMeters()
   renderBills()
   renderPayments()
@@ -32,10 +45,29 @@ function renderAll() {
   renderRecent()
 }
 
-function renderUnits() {
+function renderBuildings() {
   const tbody = document.getElementById('building-tbody')
+  const list = Store.getBuildings()
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="3">등록된 건물이 없습니다.</td></tr>'
+    return
+  }
+  tbody.innerHTML = list.map(b => `
+    <tr>
+      <td>${b.name}</td>
+      <td>${b.address || '-'}</td>
+      <td>
+        <button class="btn btn-secondary" onclick="editBuilding(${b.id})" style="padding:4px 8px;font-size:12px">수정</button>
+        <button class="btn btn-secondary" onclick="deleteBuilding(${b.id})" style="padding:4px 8px;font-size:12px">삭제</button>
+      </td>
+    </tr>
+  `).join('')
+}
+
+function renderUnits() {
+  const tbody = document.getElementById('unit-tbody')
   let units = Store.getUnits()
-  const q = (document.getElementById('building-search')?.value || '').toLowerCase()
+  const q = (document.getElementById('unit-search')?.value || '').toLowerCase()
   if (q) {
     units = units.filter(u =>
       (u.name || '').toLowerCase().includes(q) ||
@@ -44,23 +76,58 @@ function renderUnits() {
     )
   }
   if (!units.length) {
-    tbody.innerHTML = '<tr><td colspan="7">등록된 세대가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="5">등록된 세대가 없습니다.</td></tr>'
     return
   }
-  tbody.innerHTML = units.map(u => `
-    <tr>
+  tbody.innerHTML = units.map(u => {
+    const bld = Store.getBuildings().find(b => b.id === u.buildingId)
+    return `<tr>
       <td>${u.name}</td>
+      <td>${bld ? bld.name : '-'}</td>
       <td>${u.tenant || '-'}</td>
       <td>${u.phone || '-'}</td>
-      <td>${u.contractStart || '-'} ~ ${u.contractEnd || '-'}</td>
-      <td>${fmt(u.rent)}</td>
-      <td>${fmt(u.maintenanceFee)}</td>
       <td>
         <button class="btn btn-secondary" onclick="editUnit(${u.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteUnit(${u.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
-    </tr>
-  `).join('')
+    </tr>`
+  }).join('')
+}
+
+function renderContracts() {
+  const tbody = document.getElementById('contract-tbody')
+  let contracts = Store.getContracts()
+  const q = (document.getElementById('contract-search')?.value || '').toLowerCase()
+  if (q) {
+    contracts = contracts.filter(c => {
+      const unit = Store.getUnits().find(u => u.id === c.unitId)
+      return (c.tenant || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q) ||
+        (unit && unit.name.toLowerCase().includes(q))
+    })
+  }
+  if (!contracts.length) {
+    tbody.innerHTML = '<tr><td colspan="8">등록된 계약이 없습니다.</td></tr>'
+    return
+  }
+  tbody.innerHTML = contracts.map(c => {
+    const unit = Store.getUnits().find(u => u.id === c.unitId)
+    const badge = c.status === 'active' ? 'badge-paid' : 'badge-unpaid'
+    const label = c.status === 'active' ? '진행중' : '종료'
+    return `<tr>
+      <td>${unit ? unit.name : '알 수 없음'}</td>
+      <td>${c.tenant || '-'}</td>
+      <td>${c.phone || '-'}</td>
+      <td>${c.contractStart || '-'} ~ ${c.contractEnd || '-'}</td>
+      <td>${fmt(c.rent)}</td>
+      <td>${fmt(c.maintenanceFee)}</td>
+      <td><span class="badge ${badge}">${label}</span></td>
+      <td>
+        <button class="btn btn-secondary" onclick="editContract(${c.id})" style="padding:4px 8px;font-size:12px">수정</button>
+        <button class="btn btn-secondary" onclick="deleteContract(${c.id})" style="padding:4px 8px;font-size:12px">삭제</button>
+      </td>
+    </tr>`
+  }).join('')
 }
 
 function renderMeters() {
@@ -186,29 +253,97 @@ function updateStats() {
   document.getElementById('stat-unpaid').textContent = unpaid
 }
 
+/* Draggable modal */
+function setupDraggableModal() {
+  const header = document.getElementById('modal-header')
+  const modal = document.getElementById('modal')
+  let isDragging = false, startX, startY, origX, origY
+
+  header.addEventListener('mousedown', e => {
+    if (e.target.closest('.btn-close')) return
+    isDragging = true
+    modal.classList.add('dragging')
+    const rect = modal.getBoundingClientRect()
+    origX = rect.left
+    origY = rect.top
+    startX = e.clientX
+    startY = e.clientY
+    modal.style.left = origX + 'px'
+    modal.style.top = origY + 'px'
+    modal.style.transform = 'none'
+  })
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return
+    modal.style.left = (origX + e.clientX - startX) + 'px'
+    modal.style.top = (origY + e.clientY - startY) + 'px'
+  })
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return
+    isDragging = false
+    modal.classList.remove('dragging')
+  })
+}
+
 /* Modal */
 function showModal(type, editData) {
   state.currentModal = type
   state.editingId = editData ? editData.id : null
   const overlay = document.getElementById('modal-overlay')
+  const modal = document.getElementById('modal')
   overlay.classList.remove('hidden')
+  modal.style.left = ''
+  modal.style.top = ''
+  modal.style.transform = 'translate(-50%, -50%)'
   const title = document.getElementById('modal-title')
   const body = document.getElementById('modal-body')
   switch (type) {
     case 'building': {
+      title.textContent = editData ? '건물 수정' : '건물 추가'
+      body.innerHTML = `
+        <div class="form-group"><label>건물명</label><input id="f-bname" value="${editData ? esc(editData.name) : ''}"></div>
+        <div class="form-group"><label>주소</label><input id="f-baddr" value="${editData ? esc(editData.address || '') : ''}"></div>
+        <div class="form-group"><label>메모</label><textarea id="f-bmemo" rows="3">${editData ? esc(editData.memo || '') : ''}</textarea></div>
+      `
+      break
+    }
+    case 'unit': {
+      const buildings = Store.getBuildings()
       title.textContent = editData ? '세대 수정' : '세대 추가'
       body.innerHTML = `
-        <div class="form-group"><label>세대명 (예: 101호)</label><input id="f-name" value="${editData ? editData.name : ''}"></div>
-        <div class="form-group"><label>세입자명</label><input id="f-tenant" value="${editData ? editData.tenant || '' : ''}"></div>
-        <div class="form-group"><label>연락처</label><input id="f-phone" value="${editData ? editData.phone || '' : ''}"></div>
-        <div class="form-group"><label>이메일</label><input id="f-email" type="email" value="${editData ? editData.email || '' : ''}"></div>
-        <div class="form-group"><label>비상연락처</label><input id="f-emergency" value="${editData ? editData.emergency || '' : ''}"></div>
-        <div class="form-group"><label>월세</label><input id="f-rent" type="number" value="${editData ? editData.rent : ''}"></div>
-        <div class="form-group"><label>관리비</label><input id="f-mfee" type="number" value="${editData ? editData.maintenanceFee : ''}"></div>
-        <div class="form-group"><label>보증금</label><input id="f-deposit" type="number" value="${editData ? editData.deposit || '' : ''}"></div>
-        <div class="form-group"><label>납부일</label><input id="f-duedate" type="number" value="${editData ? editData.dueDate || 10 : 10}"></div>
+        <div class="form-group"><label>세대명 (예: 101호)</label><input id="f-uname" value="${editData ? esc(editData.name) : ''}"></div>
+        <div class="form-group"><label>건물</label><select id="f-ubuilding"><option value="">선택 안함</option>${
+          buildings.map(b => `<option value="${b.id}" ${editData && editData.buildingId === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')
+        }</select></div>
+        <div class="form-group"><label>세입자명</label><input id="f-utenant" value="${editData ? esc(editData.tenant || '') : ''}"></div>
+        <div class="form-group"><label>연락처</label><input id="f-uphone" value="${editData ? esc(editData.phone || '') : ''}"></div>
+        <div class="form-group"><label>이메일</label><input id="f-uemail" type="email" value="${editData ? esc(editData.email || '') : ''}"></div>
+        <div class="form-group"><label>비상연락처</label><input id="f-uemergency" value="${editData ? esc(editData.emergency || '') : ''}"></div>
+      `
+      break
+    }
+    case 'contract': {
+      const units = Store.getUnits()
+      title.textContent = editData ? '계약 수정' : '계약 추가'
+      body.innerHTML = `
+        <div class="form-group"><label>세대</label><select id="f-cunit">${
+          units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')
+        }</select></div>
+        <div class="form-group"><label>세입자명</label><input id="f-ctenant" value="${editData ? esc(editData.tenant || '') : ''}"></div>
+        <div class="form-group"><label>연락처</label><input id="f-cphone" value="${editData ? esc(editData.phone || '') : ''}"></div>
+        <div class="form-group"><label>이메일</label><input id="f-cemail" type="email" value="${editData ? esc(editData.email || '') : ''}"></div>
+        <div class="form-group"><label>비상연락처</label><input id="f-cemergency" value="${editData ? esc(editData.emergency || '') : ''}"></div>
+        <div class="form-group"><label>월세</label><input id="f-crent" type="number" value="${editData ? editData.rent : ''}"></div>
+        <div class="form-group"><label>관리비</label><input id="f-cmfee" type="number" value="${editData ? editData.maintenanceFee : ''}"></div>
+        <div class="form-group"><label>보증금</label><input id="f-cdeposit" type="number" value="${editData ? editData.deposit || '' : ''}"></div>
+        <div class="form-group"><label>납부일</label><input id="f-cduedate" type="number" value="${editData ? editData.dueDate || 10 : 10}"></div>
         <div class="form-group"><label>계약 시작</label><input id="f-cstart" type="date" value="${editData ? editData.contractStart || '' : ''}"></div>
         <div class="form-group"><label>계약 종료</label><input id="f-cend" type="date" value="${editData ? editData.contractEnd || '' : ''}"></div>
+        <div class="form-group"><label>상태</label><select id="f-cstatus">
+          <option value="active" ${editData && editData.status === 'active' ? 'selected' : ''}>진행중</option>
+          <option value="ended" ${editData && editData.status === 'ended' ? 'selected' : ''}>종료</option>
+        </select></div>
       `
       break
     }
@@ -218,7 +353,7 @@ function showModal(type, editData) {
       title.textContent = isEdit ? '검침 수정' : '검침 입력'
       body.innerHTML = `
         <div class="form-group"><label>세대</label><select id="f-unit">${
-          units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${u.name}</option>`).join('')
+          units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')
         }</select></div>
         <div class="form-group"><label>검침일</label><input id="f-date" type="date" value="${editData ? editData.date : new Date().toISOString().slice(0, 10)}"></div>
         <div class="form-group"><label>전기 (kWh)</label><input id="f-elec" type="number" step="0.1" value="${editData ? editData.electricity : ''}"></div>
@@ -232,7 +367,7 @@ function showModal(type, editData) {
       title.textContent = '입금 등록'
       body.innerHTML = `
         <div class="form-group"><label>세대</label><select id="f-punit">${
-          units.map(u => `<option value="${u.id}">${u.name}</option>`).join('')
+          units.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')
         }</select></div>
         <div class="form-group"><label>청구건</label><select id="f-pbill"></select></div>
         <div class="form-group"><label>납부액</label><input id="f-pamount" type="number"></div>
@@ -273,21 +408,46 @@ function saveModal() {
   switch (type) {
     case 'building': {
       const data = {
-        name: document.getElementById('f-name').value.trim(),
-        tenant: document.getElementById('f-tenant').value.trim(),
-        phone: document.getElementById('f-phone').value.trim(),
-        email: document.getElementById('f-email').value.trim(),
-        emergency: document.getElementById('f-emergency').value.trim(),
-        rent: parseInt(document.getElementById('f-rent').value) || 0,
-        maintenanceFee: parseInt(document.getElementById('f-mfee').value) || 0,
-        deposit: parseInt(document.getElementById('f-deposit').value) || 0,
-        dueDate: parseInt(document.getElementById('f-duedate').value) || 10,
-        contractStart: document.getElementById('f-cstart').value,
-        contractEnd: document.getElementById('f-cend').value,
+        name: document.getElementById('f-bname').value.trim(),
+        address: document.getElementById('f-baddr').value.trim(),
+        memo: document.getElementById('f-bmemo').value.trim(),
+      }
+      if (!data.name) return alert('건물명을 입력하세요.')
+      if (state.editingId) Store.updateBuilding(state.editingId, data)
+      else Store.addBuilding(data)
+      break
+    }
+    case 'unit': {
+      const data = {
+        buildingId: parseInt(document.getElementById('f-ubuilding').value) || null,
+        name: document.getElementById('f-uname').value.trim(),
+        tenant: document.getElementById('f-utenant').value.trim(),
+        phone: document.getElementById('f-uphone').value.trim(),
+        email: document.getElementById('f-uemail').value.trim(),
+        emergency: document.getElementById('f-uemergency').value.trim(),
       }
       if (!data.name) return alert('세대명을 입력하세요.')
       if (state.editingId) Store.updateUnit(state.editingId, data)
       else Store.addUnit(data)
+      break
+    }
+    case 'contract': {
+      const data = {
+        unitId: parseInt(document.getElementById('f-cunit').value),
+        tenant: document.getElementById('f-ctenant').value.trim(),
+        phone: document.getElementById('f-cphone').value.trim(),
+        email: document.getElementById('f-cemail').value.trim(),
+        emergency: document.getElementById('f-cemergency').value.trim(),
+        rent: parseInt(document.getElementById('f-crent').value) || 0,
+        maintenanceFee: parseInt(document.getElementById('f-cmfee').value) || 0,
+        deposit: parseInt(document.getElementById('f-cdeposit').value) || 0,
+        dueDate: parseInt(document.getElementById('f-cduedate').value) || 10,
+        contractStart: document.getElementById('f-cstart').value,
+        contractEnd: document.getElementById('f-cend').value,
+        status: document.getElementById('f-cstatus').value,
+      }
+      if (state.editingId) Store.updateContract(state.editingId, data)
+      else Store.addContract(data)
       break
     }
     case 'meter': {
@@ -334,9 +494,19 @@ function saveModal() {
   updateStats()
 }
 
+function editBuilding(id) {
+  const item = Store.getBuildings().find(x => x.id === id)
+  if (item) showModal('building', item)
+}
+
 function editUnit(id) {
   const unit = Store.getUnits().find(u => u.id === id)
-  if (unit) showModal('building', unit)
+  if (unit) showModal('unit', unit)
+}
+
+function editContract(id) {
+  const item = Store.getContracts().find(x => x.id === id)
+  if (item) showModal('contract', item)
 }
 
 function editMeter(id) {
@@ -344,11 +514,23 @@ function editMeter(id) {
   if (meter) showModal('meter', meter)
 }
 
-function deleteUnit(id) {
+function deleteBuilding(id) {
   if (!confirm('정말 삭제하시겠습니까?')) return
+  Store.deleteBuilding(id)
+  renderAll()
+}
+
+function deleteUnit(id) {
+  if (!confirm('정말 삭제하시겠습니까? 관련된 검침/청구/수납/계약도 함께 삭제됩니다.')) return
   Store.deleteUnit(id)
   renderAll()
   updateStats()
+}
+
+function deleteContract(id) {
+  if (!confirm('정말 삭제하시겠습니까?')) return
+  Store.deleteContract(id)
+  renderAll()
 }
 
 function deleteMeter(id) {
@@ -383,6 +565,9 @@ function generateBills() {
   const commonFeePerUnit = parseInt(commonInput) || 0
   for (const u of units) {
     if (Store.getBills().find(b => b.unitId === u.id && b.yearMonth === ym)) continue
+    const contract = Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
+    const rent = contract ? contract.rent : (u.rent || 0)
+    const maintenanceFee = contract ? contract.maintenanceFee : (u.maintenanceFee || 0)
     const meters = Store.getMeters().filter(m => m.unitId === u.id)
     const lastMeter = meters[meters.length - 1]
     const prevMeter = meters[meters.length - 2]
@@ -395,12 +580,12 @@ function generateBills() {
     }
     const late = 0
     const commonFee = commonFeePerUnit
-    const total = u.rent + u.maintenanceFee + elecCost + waterCost + commonFee + late
+    const total = rent + maintenanceFee + elecCost + waterCost + commonFee + late
     Store.addBill({
       unitId: u.id,
       yearMonth: ym,
-      rent: u.rent,
-      maintenanceFee: u.maintenanceFee,
+      rent,
+      maintenanceFee,
       electricity: elecCost,
       water: waterCost,
       commonFee,
@@ -417,6 +602,12 @@ function generateBills() {
 /* Util */
 function fmt(n) {
   return (n || 0).toLocaleString() + '원'
+}
+
+function esc(s) {
+  const d = document.createElement('div')
+  d.textContent = s
+  return d.innerHTML
 }
 
 init()

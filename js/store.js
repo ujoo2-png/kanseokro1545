@@ -10,12 +10,17 @@ const Store = {
     } else {
       this._reset()
     }
+    if (!this._data.buildings) this._data.buildings = []
+    if (!this._data.contracts) this._data.contracts = []
+    this.save()
     return this._data
   },
 
   _reset() {
     this._data = {
+      buildings: [],
       units: [],
+      contracts: [],
       meters: [],
       bills: [],
       payments: [],
@@ -26,6 +31,18 @@ const Store = {
 
   save() {
     localStorage.setItem(this._key, JSON.stringify(this._data))
+  },
+
+  // Buildings
+  getBuildings() { return this._data.buildings },
+  addBuilding(b) { this._data.buildings.push({ id: Date.now(), ...b }); this.save() },
+  updateBuilding(id, data) {
+    const idx = this._data.buildings.findIndex(x => x.id === id)
+    if (idx > -1) { this._data.buildings[idx] = { ...this._data.buildings[idx], ...data }; this.save() }
+  },
+  deleteBuilding(id) {
+    this._data.buildings = this._data.buildings.filter(x => x.id !== id)
+    this.save()
   },
 
   // Units
@@ -40,6 +57,19 @@ const Store = {
     this._data.meters = this._data.meters.filter(m => m.unitId !== id)
     this._data.bills = this._data.bills.filter(b => b.unitId !== id)
     this._data.payments = this._data.payments.filter(p => p.unitId !== id)
+    this._data.contracts = this._data.contracts.filter(c => c.unitId !== id)
+    this.save()
+  },
+
+  // Contracts
+  getContracts() { return this._data.contracts },
+  addContract(c) { this._data.contracts.push({ id: Date.now(), ...c }); this.save() },
+  updateContract(id, data) {
+    const idx = this._data.contracts.findIndex(x => x.id === id)
+    if (idx > -1) { this._data.contracts[idx] = { ...this._data.contracts[idx], ...data }; this.save() }
+  },
+  deleteContract(id) {
+    this._data.contracts = this._data.contracts.filter(x => x.id !== id)
     this.save()
   },
 

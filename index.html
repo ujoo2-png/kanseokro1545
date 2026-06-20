@@ -66,22 +66,61 @@
         </div>
 
         <div id="page-building" class="page">
-          <div class="card">
-            <div class="card-header">
-              <h3>건물/세대/계약 관리</h3>
-              <div style="display:flex;gap:8px;align-items:center">
-                <input type="text" id="building-search" placeholder="세대명 / 세입자 / 연락처 검색..." oninput="renderUnits()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
-                <button class="btn btn-primary" onclick="showModal('building')">+ 추가</button>
+          <div class="tabs">
+            <button class="tab active" data-tab="tab-buildings" onclick="switchBuildingTab('tab-buildings')">🏢 건물관리</button>
+            <button class="tab" data-tab="tab-units" onclick="switchBuildingTab('tab-units')">🚪 세대관리</button>
+            <button class="tab" data-tab="tab-contracts" onclick="switchBuildingTab('tab-contracts')">📋 계약관리</button>
+          </div>
+
+          <div id="tab-buildings" class="tab-content active">
+            <div class="card">
+              <div class="card-header">
+                <h3>건물 목록</h3>
+                <button class="btn btn-primary" onclick="showModal('building')">+ 건물 추가</button>
               </div>
+              <table>
+                <thead><tr><th>건물명</th><th>주소</th><th>관리</th></tr></thead>
+                <tbody id="building-tbody">
+                  <tr><td colspan="3">등록된 건물이 없습니다.</td></tr>
+                </tbody>
+              </table>
             </div>
-            <table>
-              <thead>
-                <tr><th>세대</th><th>세입자</th><th>연락처</th><th>계약기간</th><th>월세</th><th>관리비</th><th>관리</th></tr>
-              </thead>
-              <tbody id="building-tbody">
-                <tr><td colspan="7">등록된 세대가 없습니다.</td></tr>
-              </tbody>
-            </table>
+          </div>
+
+          <div id="tab-units" class="tab-content">
+            <div class="card">
+              <div class="card-header">
+                <h3>세대 목록</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="unit-search" placeholder="세대명 / 세입자 검색..." oninput="renderUnits()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('unit')">+ 세대 추가</button>
+                </div>
+              </div>
+              <table>
+                <thead><tr><th>세대</th><th>건물</th><th>세입자</th><th>연락처</th><th>관리</th></tr></thead>
+                <tbody id="unit-tbody">
+                  <tr><td colspan="5">등록된 세대가 없습니다.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="tab-contracts" class="tab-content">
+            <div class="card">
+              <div class="card-header">
+                <h3>계약 목록</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="contract-search" placeholder="세입자 / 연락처 검색..." oninput="renderContracts()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('contract')">+ 계약 추가</button>
+                </div>
+              </div>
+              <table>
+                <thead><tr><th>세대</th><th>세입자</th><th>연락처</th><th>계약기간</th><th>월세</th><th>관리비</th><th>상태</th><th>관리</th></tr></thead>
+                <tbody id="contract-tbody">
+                  <tr><td colspan="8">등록된 계약이 없습니다.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
