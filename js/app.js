@@ -85,6 +85,38 @@ function goHome() {
   const tab = document.querySelector('#page-building .tab.active')
   if (tab) switchBuildingTab(tab.dataset.tab)
   document.querySelector('#nav a[data-page="dashboard"]').classList.add('active')
+  savePageState()
+}
+
+/** 현재 페이지 상태를 localStorage에 저장 */
+function savePageState() {
+  const active = document.querySelector('#nav a.active')
+  if (!active) return
+  const state = { page: active.dataset.page }
+  const buildingTab = document.querySelector('#page-building .tab.active')
+  if (buildingTab) state.buildingTab = buildingTab.dataset.tab
+  localStorage.setItem('kanseokro1545_page', JSON.stringify(state))
+}
+
+/** 저장된 페이지 상태 복원 */
+function restorePageState() {
+  const raw = localStorage.getItem('kanseokro1545_page')
+  if (!raw) return
+  try {
+    const state = JSON.parse(raw)
+    if (!state.page) return
+    const link = document.querySelector(`#nav a[data-page="${state.page}"]`)
+    if (!link) return
+    document.querySelectorAll('#nav a').forEach(x => x.classList.remove('active'))
+    link.classList.add('active')
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
+    const page = document.getElementById('page-' + state.page)
+    if (page) page.classList.add('active')
+    document.getElementById('page-title').textContent = link.textContent.trim()
+    if (state.page === 'building' && state.buildingTab) {
+      switchBuildingTab(state.buildingTab)
+    }
+  } catch (e) { /* ignore */ }
 }
 
 /** 앱 초기화 — Store 로드 → 네비게이션/모달/사이드바 설정 → 전체 렌더 + 통계 갱신 */
@@ -93,6 +125,7 @@ function init() {
   setupNavigation()
   setupDraggableModal()
   setupSidebar()
+  restorePageState()
   renderAll()
   updateStats()
 }
@@ -123,6 +156,7 @@ function setupNavigation() {
       document.getElementById('page-title').textContent = a.textContent.trim()
       const tab = document.querySelector('#page-building .tab.active')
       if (tab) switchBuildingTab(tab.dataset.tab)
+      savePageState()
     })
   })
 }
