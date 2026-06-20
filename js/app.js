@@ -710,7 +710,10 @@ function showModal(type, editData) {
       title.textContent = '데이터 정합성 검토'
       const orphanMeters = (editData && editData.orphanMeters) || []
       const noMeterUnits = (editData && editData.noMeterUnits) || []
-      if (!orphanMeters.length && !noMeterUnits.length) { body.innerHTML = '<p>문제가 없습니다.</p>'; break }
+      const badPayments = (editData && editData.badPayments) || []
+      if (!orphanMeters.length && !noMeterUnits.length && !badPayments.length) {
+        body.innerHTML = '<p>문제가 없습니다.</p>'; break
+      }
       let html = ''
       if (orphanMeters.length) {
         const oids = [...new Set(orphanMeters.map(m => m.unitId))]
@@ -722,10 +725,17 @@ function showModal(type, editData) {
         html += `<p style="margin:0 0 8px;font-size:13px;color:#e65100">계약중이지만 검침 데이터가 없는 세대 ${noMeterUnits.length}건</p>
         <div style="margin-bottom:12px;font-size:12px"><strong>대상 세대:</strong> ${noMeterUnits.map(u => esc(u.name)).join(', ')}</div>`
       }
+      if (badPayments.length) {
+        const bUnits = [...new Set(badPayments.map(p => p.unitId))].map(id => Store.getUnits().find(u => u.id === id)).filter(Boolean)
+        html += `<p style="margin:0 0 4px;font-size:13px;color:#d32f2f">수납-청구건 세대 불일치 ${badPayments.length}건</p>
+        <div style="margin-bottom:4px;font-size:12px"><strong>영향받은 세대:</strong> ${bUnits.map(u => esc(u.name)).join(', ')}</div>
+        <div style="font-size:11px;color:#888;margin-bottom:8px">입금 등록 시 선택한 세대와 청구건의 세대가 다른 경우입니다. [자동 수정] 버튼을 누르면 청구건 기준으로 세대를 맞춥니다.</div>`
+      }
       body.innerHTML = html + `
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn btn-secondary" onclick="closeModal()" style="flex:1">취소</button>
           ${orphanMeters.length ? '<button class="btn btn-primary" onclick="deleteOrphanMeters()" style="flex:1;background:#d32f2f">고아 검침 삭제</button>' : ''}
+          ${badPayments.length ? '<button class="btn btn-primary" onclick="fixBadPayments()" style="flex:1;background:#e65100">수납 불일치 자동 수정</button>' : ''}
         </div>
       `
       break
@@ -1043,7 +1053,7 @@ function showMeterInput(unitId) {
   showModal('meter', { unitId })
 }
 
-/** 정합성 검토 — 계약중 아닌 세대의 검침 데이터 + 계약중이지만 검침 없는 세대 찾기 */
+/** 정합성 검토 — 계약중 아닌 세대 검침 + 수납-청구건 불일치 찾기 */
 function checkMeterIntegrity() {
   const allMeters = Store.getMeters()
   const activeContracts = Store.getContracts().filter(c => c.status === 'active')
@@ -1051,11 +1061,16 @@ function checkMeterIntegrity() {
   const orphanMeters = allMeters.filter(m => !activeUnitIds.includes(m.unitId))
   const noMeterUnitIds = activeUnitIds.filter(uid => !allMeters.some(m => m.unitId === uid))
   const noMeterUnits = noMeterUnitIds.map(uid => Store.getUnits().find(u => u.id === uid)).filter(Boolean)
-  if (!orphanMeters.length && !noMeterUnits.length) {
+
+  const badPayments = Store.getPayments().filter(p => {
+    const bill = Store.getBills().find(b => b.id === p.billId)
+    return bill && bill.unitId !== p.unitId
+  })
+  if (!orphanMeters.length && !noMeterUnits.length && !badPayments.length) {
     alert('모든 데이터가 정상입니다.')
     return
   }
-  showModal('integrity-check', { orphanMeters, noMeterUnits })
+  showModal('integrity-check', { orphanMeters, noMeterUnits, badPayments })
 }
 
 /** 고아 검침 데이터 일괄 삭제 (계약중 아닌 세대) */
@@ -1070,6 +1085,25 @@ function deleteOrphanMeters() {
   closeModal()
   renderAll()
   alert(`${deleted}건의 검침 데이터가 삭제되었습니다.`)
+}
+
+/** 수납-청구건 불일치 데이터 자동 수정 */
+function fixBadPayments() {
+  let fixed = 0
+  Store.getPayments().forEach(p => {
+    const bill = Store.getBills().find(b => b.id === p.billId)
+    if (bill && bill.unitId !== p.unitId) {
+      p.unitId = bill.unitId
+      fixed++
+    }
+  })
+  if (fixed > 0) {
+    Store.save()
+    closeModal()
+    renderAll()
+    updateStats()
+    alert(`${fixed}건의 수납 데이터가 수정되었습니다.`)
+  }
 }
 
 /** 공지 상세 읽기 모달 */

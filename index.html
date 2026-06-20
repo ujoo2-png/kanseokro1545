@@ -207,6 +207,7 @@
                 <h3>수납/미수금 관리</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="payment-search" placeholder="세대명 검색..." oninput="renderPayments()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
                   <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
                 </div>
               </div>
