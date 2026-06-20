@@ -11,7 +11,7 @@
     <aside id="sidebar">
       <div class="sidebar-header" onclick="goHome()" style="cursor:pointer">
         <h1>간석로1545</h1>
-        <p class="subtitle">관리자 시스템 v1.6.2</p>
+        <p class="subtitle">관리자 시스템 v1.7.0</p>
       </div>
       <nav id="nav">
         <ul>
@@ -61,6 +61,10 @@
             <div class="stat-card stat-danger">
               <span class="stat-label">연체 60일+</span>
               <span class="stat-value" id="stat-overdue60">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">선수금 잔액</span>
+              <span class="stat-value" id="stat-prepaid">0원</span>
             </div>
           </div>
           <div class="card">
@@ -193,10 +197,10 @@
             </div>
             <table>
               <thead>
-                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>공용</th><th>TV수신료</th><th>연체료</th><th>합계</th><th>납부상태</th><th>관리</th></tr>
+                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>공용</th><th>TV수신료</th><th>연체료</th><th>합계</th><th>선수금차감</th><th>납부상태</th><th>관리</th></tr>
               </thead>
               <tbody id="billing-tbody">
-                <tr><td colspan="12">청구 내역이 없습니다.</td></tr>
+                <tr><td colspan="13">청구 내역이 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -205,21 +209,68 @@
         <div id="page-payment" class="page">
           <div class="card">
             <div class="card-header">
-                <h3>수납/미수금 관리</h3>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <input type="text" id="payment-search" placeholder="세대명 검색..." oninput="renderPayments()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
-                  <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
-                  <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
-                </div>
+              <h3>수납/미수금 관리</h3>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
+                <button class="btn btn-secondary" onclick="showModal('deposit-deduction')" style="font-size:12px">보증금 차감</button>
+                <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
+              </div>
+            </div>
+            <div class="tabs" style="border-bottom:1px solid #ddd;padding:0 16px">
+              <button class="tab active" data-ptab="payments" onclick="switchPaymentTab('payments')">수납내역</button>
+              <button class="tab" data-ptab="arrears" onclick="switchPaymentTab('arrears')">미수금</button>
+              <button class="tab" data-ptab="prepaids" onclick="switchPaymentTab('prepaids')">선수금</button>
+              <button class="tab" data-ptab="deposits" onclick="switchPaymentTab('deposits')">보증금</button>
+            </div>
+
+            <div id="ptab-payments" class="tab-content active">
+              <div style="padding:10px 16px;border-bottom:1px solid #eee">
+                <input type="text" id="payment-search" placeholder="세대명 검색..." oninput="renderPayments()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
               </div>
               <table>
                 <thead>
                   <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>연체정보</th><th>관리</th></tr>
-              </thead>
-              <tbody id="payment-tbody">
-                <tr><td colspan="7">수납 내역이 없습니다.</td></tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody id="payment-tbody">
+                  <tr><td colspan="7">수납 내역이 없습니다.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="ptab-arrears" class="tab-content">
+              <div id="arrears-summary" style="padding:10px 16px;border-bottom:1px solid #eee;font-size:13px;display:flex;gap:16px"></div>
+              <table>
+                <thead>
+                  <tr><th>세대</th><th>미납건수</th><th>총 청구액</th><th>총 납부액</th><th>총 미납액</th><th>최장 연체일</th><th>가장 오래된 미납</th></tr>
+                </thead>
+                <tbody id="arrears-tbody">
+                  <tr><td colspan="7">미수금이 없습니다.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="ptab-prepaids" class="tab-content">
+              <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center">
+                <select id="prepaid-unit-filter" onchange="renderPrepaids()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none"></select>
+                <button class="btn btn-primary" onclick="showModal('prepaid')">+ 선수금 등록</button>
+              </div>
+              <table>
+                <thead><tr><th>세대</th><th>입금액</th><th>잔액</th><th>등록일</th><th>관리</th></tr></thead>
+                <tbody id="prepaid-tbody">
+                  <tr><td colspan="5">선수금 내역이 없습니다.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="ptab-deposits" class="tab-content">
+              <div id="deposit-summary" style="padding:10px 16px;border-bottom:1px solid #eee;font-size:13px;display:flex;gap:16px"></div>
+              <table>
+                <thead><tr><th>세대</th><th>계약기간</th><th>최초 보증금</th><th>차감액</th><th>잔액</th><th>차감내역</th></tr></thead>
+                <tbody id="deposit-tbody">
+                  <tr><td colspan="6">보증금 내역이 없습니다.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

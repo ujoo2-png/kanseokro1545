@@ -1,13 +1,19 @@
 /*
  * store.js — localStorage 기반 데이터 저장소
- * 간석로1545 관리자 시스템 v1.6.0
+ * 간석로1545 관리자 시스템 v1.7.0
  * 모든 데이터는 브라우저 localStorage('kanseokro1545_data')에 JSON 직렬화/역직렬화
  */
 
 const Store = {
   _data: null,
-
   _key: 'kanseokro1545_data',
+  _idCounter: Date.now(),
+
+  /** 고유 ID 생성 (Date.now() 중복 방지) */
+  _nextId() {
+    this._idCounter++
+    return this._idCounter
+  },
 
   /** localStorage에서 JSON 로드, 실패 시 초기화 */
   init() {
@@ -19,8 +25,38 @@ const Store = {
     }
     if (!this._data.buildings) this._data.buildings = []
     if (!this._data.contracts) this._data.contracts = []
+    if (!this._data.prepaids) this._data.prepaids = []
+    if (!this._data.depositDeductions) this._data.depositDeductions = []
+    this._fixDuplicateIds()
     this.save()
     return this._data
+  },
+
+  /** 중복 ID를 가진 모든 데이터에 새 ID 부여 + 참조(payments.billId) 업데이트 */
+  _fixDuplicateIds() {
+    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions']
+    const renamed = []
+    for (const key of keys) {
+      const arr = this._data[key]
+      if (!arr) continue
+      const seen = new Set()
+      this._data[key] = arr.map(item => {
+        if (seen.has(item.id)) {
+          const newId = this._nextId()
+          renamed.push({ oldId: item.id, newId, unitId: item.unitId })
+          return { ...item, id: newId }
+        }
+        seen.add(item.id)
+        return item
+      })
+    }
+    for (const r of renamed) {
+      for (const p of (this._data.payments || [])) {
+        if (p.billId === r.oldId && p.unitId === r.unitId) {
+          p.billId = r.newId
+        }
+      }
+    }
   },
 
   /** 모든 데이터를 빈 배열로 초기화 */
@@ -32,6 +68,8 @@ const Store = {
       meters: [],
       bills: [],
       payments: [],
+      prepaids: [],
+      depositDeductions: [],
       notices: [],
     }
     this.save()
@@ -46,7 +84,7 @@ const Store = {
   /** @returns {Array} 건물 목록 */
   getBuildings() { return this._data.buildings },
   /** 건물 추가 (id=Date.now) */
-  addBuilding(b) { this._data.buildings.push({ id: Date.now(), ...b }); this.save() },
+  addBuilding(b) { this._data.buildings.push({ id: this._nextId(), ...b }); this.save() },
   /** 건물 수정 (id 기준 병합) */
   updateBuilding(id, data) {
     const idx = this._data.buildings.findIndex(x => x.id === id)
@@ -62,7 +100,7 @@ const Store = {
   /** @returns {Array} 세대 목록 */
   getUnits() { return this._data.units },
   /** 세대 추가 */
-  addUnit(u) { this._data.units.push({ id: Date.now(), ...u }); this.save() },
+  addUnit(u) { this._data.units.push({ id: this._nextId(), ...u }); this.save() },
   /** 세대 수정 */
   updateUnit(id, data) {
     const idx = this._data.units.findIndex(u => u.id === id)
@@ -74,6 +112,8 @@ const Store = {
     this._data.meters = this._data.meters.filter(m => m.unitId !== id)
     this._data.bills = this._data.bills.filter(b => b.unitId !== id)
     this._data.payments = this._data.payments.filter(p => p.unitId !== id)
+    this._data.prepaids = (this._data.prepaids || []).filter(p => p.unitId !== id)
+    this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.unitId !== id)
     this._data.contracts = this._data.contracts.filter(c => c.unitId !== id)
     this.save()
   },
@@ -82,7 +122,7 @@ const Store = {
   /** @returns {Array} 계약 목록 */
   getContracts() { return this._data.contracts },
   /** 계약 추가 */
-  addContract(c) { this._data.contracts.push({ id: Date.now(), ...c }); this.save() },
+  addContract(c) { this._data.contracts.push({ id: this._nextId(), ...c }); this.save() },
   /** 계약 수정 */
   updateContract(id, data) {
     const idx = this._data.contracts.findIndex(x => x.id === id)
@@ -98,7 +138,7 @@ const Store = {
   /** @returns {Array} 검침 데이터 목록 */
   getMeters() { return this._data.meters },
   /** 검침 추가 */
-  addMeter(m) { this._data.meters.push({ id: Date.now(), ...m }); this.save() },
+  addMeter(m) { this._data.meters.push({ id: this._nextId(), ...m }); this.save() },
   /** 검침 수정 */
   updateMeter(id, data) {
     const idx = this._data.meters.findIndex(m => m.id === id)
@@ -109,7 +149,7 @@ const Store = {
   /** @returns {Array} 청구 목록 */
   getBills() { return this._data.bills },
   /** 청구 추가 */
-  addBill(b) { this._data.bills.push({ id: Date.now(), ...b }); this.save() },
+  addBill(b) { this._data.bills.push({ id: this._nextId(), ...b }); this.save() },
   /** 청구 수정 (주로 status 업데이트) */
   updateBill(id, data) {
     const idx = this._data.bills.findIndex(b => b.id === id)
@@ -120,7 +160,7 @@ const Store = {
   /** @returns {Array} 수납 목록 */
   getPayments() { return this._data.payments },
   /** 수납 등록 */
-  addPayment(p) { this._data.payments.push({ id: Date.now(), ...p }); this.save() },
+  addPayment(p) { this._data.payments.push({ id: this._nextId(), ...p }); this.save() },
   /** 수납 삭제 */
   deletePayment(id) {
     this._data.payments = this._data.payments.filter(p => p.id !== id)
@@ -156,11 +196,57 @@ const Store = {
     }).filter(item => item.unpaid > 0)
   },
 
+  // Prepaids (선수금)
+  /** @returns {Array} 선수금 목록 */
+  getPrepaids() { return this._data.prepaids || [] },
+  /** 선수금 등록 */
+  addPrepaid(p) {
+    this._data.prepaids.push({ id: this._nextId(), balance: p.amount, createdAt: new Date().toISOString().slice(0, 10), ...p })
+    this.save()
+  },
+  /** 특정 세대 선수금 총 잔액 */
+  getPrepaidBalance(unitId) {
+    if (!this._data.prepaids) this._data.prepaids = []
+    return this._data.prepaids.filter(p => p.unitId === unitId).reduce((s, p) => s + p.balance, 0)
+  },
+  /** 선수금 차감 (generateBills에서 호출). 차감 후 남은 잔액 반환 */
+  deductPrepaid(unitId, amount) {
+    let remaining = amount
+    const entries = (this._data.prepaids || []).filter(p => p.unitId === unitId && p.balance > 0)
+    for (const entry of entries) {
+      if (remaining <= 0) break
+      const deduct = Math.min(entry.balance, remaining)
+      entry.balance -= deduct
+      remaining -= deduct
+    }
+    this.save()
+    return remaining
+  },
+  /** 선수금 삭제 */
+  deletePrepaid(id) {
+    this._data.prepaids = (this._data.prepaids || []).filter(p => p.id !== id)
+    this.save()
+  },
+
+  // Deposit Deductions (보증금 차감)
+  /** @returns {Array} 보증금 차감 목록 */
+  getDepositDeductions() { return this._data.depositDeductions || [] },
+  /** 보증금 차감 등록 (payment 생성 포함) */
+  addDepositDeduction(d) {
+    this._data.depositDeductions.push({ id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...d })
+    this.save()
+  },
+  /** 보증금 차감 내역 삭제 */
+  deleteDepositDeduction(id) {
+    this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.id !== id)
+    this.save()
+  },
+
   // Notices
   /** @returns {Array} 공지 목록 */
   getNotices() { return this._data.notices },
   /** 공지 추가 */
-  addNotice(n) { this._data.notices.push({ id: Date.now(), ...n }); this.save() },
+  addNotice(n) { this._data.notices.push({ id: this._nextId(), ...n }); this.save() },
   /** 공지 수정 (sent/발송시간) */
   updateNotice(id, data) {
     const idx = this._data.notices.findIndex(n => n.id === id)

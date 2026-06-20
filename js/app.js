@@ -1,9 +1,15 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.6.0
+ * 간석로1545 관리자 시스템 v1.7.0
  *
  * 히스토리
- * v1.6.0 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드, 세대-청구건 불일치 방지
+ * v1.7.0 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
+ * v1.6.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
+ * v1.6.4 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
+ * v1.6.3 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
+ * v1.6.2 (2026-06) 입금등록: 청구건 기준 세대 자동 매칭 (불일치 원천 차단)
+ * v1.6.1 (2026-06) 수납-청구건 불일치 정합성 검사 및 자동 수정 기능
+ * v1.6.0 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드
  * v1.5.0 (2026-06) 검색필터 전메뉴 적용, 엔티티명 클릭 상세보기, A6 명세서 출력, 정합성검토+검침누락, 세대명굵게, 검침량감소체크
  * v1.4.0 (2026-06) 청구 재생성 버그 수정, 사용량/복지필드 저장, TV수신료, 검침 날짜정렬
  * v1.3.0 (2026-06) 복지할인, 한국 전기/수도 누진제 요금 계산 엔진
@@ -177,7 +183,10 @@ function renderAll() {
   renderMeters()
   populateBillFilter()
   renderBills()
+  switchPaymentTab('payments')
   renderPayments()
+  populatePrepaidFilter()
+  renderPrepaids()
   renderNotices()
   renderRecent()
   renderDashboardContracts()
@@ -355,13 +364,20 @@ function renderBills() {
   const filterYm = ymFilter ? ymFilter.value : ''
   const filterUnit = unitFilter ? parseInt(unitFilter.value) || 0 : 0
   const filterStatus = statusFilter ? statusFilter.value : ''
-  let bills = Store.getBills()
+  const allUnits = Store.getUnits()
+  const allBills = Store.getBills()
+  let bills = allBills
   if (filterYm) bills = bills.filter(b => b.yearMonth === filterYm)
-  if (filterUnit) bills = bills.filter(b => b.unitId === filterUnit)
+  let matchedUnitName = ''
+  if (filterUnit) {
+    const matchUnit = allUnits.find(u => u.id === filterUnit)
+    matchedUnitName = matchUnit ? matchUnit.name : 'ID:' + filterUnit
+    bills = bills.filter(b => b.unitId === filterUnit)
+  }
   if (filterStatus) bills = bills.filter(b => b.status === filterStatus)
   bills.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth) || (a.id - b.id))
   if (!bills.length) {
-    tbody.innerHTML = '<tr><td colspan="12">청구 내역이 없습니다.</td></tr>'
+    tbody.innerHTML = `<tr><td colspan="13">청구 내역이 없습니다. (필터: ${filterYm || '전체'} / ${matchedUnitName || '전체'} / ${filterStatus || '전체'})</td></tr>`
     return
   }
   tbody.innerHTML = bills.map(b => {
@@ -371,6 +387,7 @@ function renderBills() {
     const usageTag = (usage, unitLabel) => usage ? `<span style="font-size:11px;color:#888">(${usage}${unitLabel})</span>` : ''
     const hasActive = !!Store.getContracts().find(c => c.unitId === b.unitId && c.status === 'active')
     const vacantClass = hasActive ? '' : 'row-vacant'
+    const prepaidAmt = allBills.length ? Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0) : 0
     return `<tr class="${vacantClass}">
       <td><a href="#" onclick="showBillDetail(${b.id});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${b.yearMonth}</td>
@@ -382,6 +399,7 @@ function renderBills() {
       <td>${fmt(b.tvFee)}</td>
       <td>${fmt(b.lateFee)}</td>
       <td>${fmt(b.total)}</td>
+      <td>${prepaidAmt > 0 ? fmt(prepaidAmt) : '-'}</td>
       <td><span class="badge ${badge}">${label}</span></td>
       <td><button class="btn btn-secondary" onclick="showBillDetail(${b.id})" style="padding:4px 8px;font-size:12px">상세</button></td>
     </tr>`
@@ -411,17 +429,164 @@ function renderPayments() {
     const label = unpaid <= 0 ? '완납' : unpaid >= bill.total ? '미납' : '부분납'
     const overdue = Store.getOverdueBills(p.unitId).find(o => o.bill.id === p.billId)
     const ob = overdue && overdue.overdueDays > 0 ? overdueBadge(overdue.overdueDays) : null
+    const srcLabel = p.source === 'prepaid' ? ' (선수금)' : p.source === 'deposit' ? ' (보증금)' : ''
     return `<tr>
       <td><a href="#" onclick="showBillDetail(${bill ? bill.id : 0});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${bill ? bill.yearMonth : '-'}</td>
       <td>${fmt(bill ? bill.total : 0)}</td>
-      <td>${fmt(p.amount)}</td>
+      <td>${fmt(p.amount)}${srcLabel}</td>
       <td>${fmt(unpaid)}</td>
       <td>${p.date}</td>
       <td>${ob ? `<span class="badge ${ob.cls}">${ob.label}</span>` : `<span class="badge ${badge}">${label}</span>`}</td>
-      <td><button class="btn btn-secondary" onclick="deletePayment(${p.id})" style="padding:4px 8px;font-size:12px">삭제</button></td>
+      <td>${p.source && p.source !== 'manual' ? '' : `<button class="btn btn-secondary" onclick="deletePayment(${p.id})" style="padding:4px 8px;font-size:12px">삭제</button>`}</td>
     </tr>`
   }).join('')
+}
+
+/* Payment page tabs */
+function switchPaymentTab(tabId) {
+  document.querySelectorAll('#page-payment .tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('#page-payment .tab-content').forEach(c => c.classList.remove('active'))
+  document.querySelector(`#page-payment .tab[data-ptab="${tabId}"]`).classList.add('active')
+  document.getElementById('ptab-' + tabId).classList.add('active')
+  if (tabId === 'arrears') renderArrears()
+  if (tabId === 'prepaids') renderPrepaids()
+  if (tabId === 'deposits') renderDeposits()
+}
+
+function renderArrears() {
+  const tbody = document.getElementById('arrears-tbody')
+  const summary = document.getElementById('arrears-summary')
+  const units = Store.getUnits()
+  const overdue = Store.getOverdueBills()
+  if (!overdue.length) {
+    tbody.innerHTML = '<tr><td colspan="7">미수금이 없습니다.</td></tr>'
+    if (summary) summary.innerHTML = '<span>총 미수금: <strong>0원</strong></span>'
+    return
+  }
+  const byUnit = {}
+  for (const o of overdue) {
+    if (!byUnit[o.bill.unitId]) byUnit[o.bill.unitId] = []
+    byUnit[o.bill.unitId].push(o)
+  }
+  const rows = Object.keys(byUnit)
+    .map(uid => {
+      const unit = units.find(u => u.id === parseInt(uid))
+      const items = byUnit[uid]
+      const totalBilled = items.reduce((s, i) => s + i.bill.total, 0)
+      const totalPaid = items.reduce((s, i) => s + i.paid, 0)
+      const totalUnpaid = items.reduce((s, i) => s + i.unpaid, 0)
+      const maxOverdue = Math.max(...items.map(i => i.overdueDays))
+      const oldest = items.reduce((a, b) => a.bill.yearMonth < b.bill.yearMonth ? a : b)
+      return { uid: parseInt(uid), name: unit ? unit.name : '?', count: items.length, totalBilled, totalPaid, totalUnpaid, maxOverdue, oldest }
+    })
+    .sort((a, b) => b.totalUnpaid - a.totalUnpaid)
+  const grandTotal = rows.reduce((s, r) => s + r.totalUnpaid, 0)
+  if (summary) summary.innerHTML = `<span>연체 세대: <strong>${rows.length}세대</strong></span><span>총 미수금: <strong style="color:#d32f2f">${fmt(grandTotal)}</strong></span>`
+  tbody.innerHTML = rows.map(r => {
+    const badgeCls = r.maxOverdue >= 60 ? 'badge-unpaid' : r.maxOverdue >= 30 ? 'badge-pending' : ''
+    return `<tr>
+      <td><a href="#" onclick="switchPaymentTab('payments');document.getElementById('payment-search').value='${esc(r.name)}';renderPayments();return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${esc(r.name)}</a></td>
+      <td>${r.count}건</td>
+      <td>${fmt(r.totalBilled)}</td>
+      <td>${fmt(r.totalPaid)}</td>
+      <td style="color:#d32f2f;font-weight:600">${fmt(r.totalUnpaid)}</td>
+      <td><span class="badge ${badgeCls}">${r.maxOverdue}일</span></td>
+      <td>${r.oldest.bill.yearMonth} ${fmt(r.oldest.unpaid)}</td>
+    </tr>`
+  }).join('')
+}
+
+function renderDeposits() {
+  const tbody = document.getElementById('deposit-tbody')
+  const summary = document.getElementById('deposit-summary')
+  const units = Store.getUnits()
+  const contracts = Store.getContracts()
+  const deductions = Store.getDepositDeductions()
+  const rows = []
+  let totalOriginal = 0, totalDeducted = 0, totalRemaining = 0
+  for (const c of contracts) {
+    const unit = units.find(u => u.id === c.unitId)
+    const unitDeductions = deductions.filter(d => d.unitId === c.unitId)
+    const deducted = unitDeductions.reduce((s, d) => s + d.amount, 0)
+    const currentDeposit = c.deposit || 0
+    const originalDeposit = currentDeposit + deducted
+    if (!originalDeposit && !deducted) continue
+    totalOriginal += originalDeposit
+    totalDeducted += deducted
+    totalRemaining += currentDeposit
+    const history = unitDeductions.map(d =>
+      `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0">
+        <span style="font-size:12px;color:#666">${d.date}</span>
+        <span style="color:#e65100">-${fmt(d.amount)}</span>
+      </div>`
+    ).join('')
+    rows.push({
+      name: unit ? unit.name : '?',
+      period: (c.contractStart || '-') + ' ~ ' + (c.contractEnd || '-'),
+      original: originalDeposit,
+      deducted,
+      remaining: currentDeposit,
+      history: history || '<span style="color:#999;font-size:12px">-</span>'
+    })
+  }
+  if (summary) summary.innerHTML =
+    `<span>총 보증금: <strong>${fmt(totalOriginal)}</strong></span>
+     <span>총 차감: <strong style="color:#e65100">${fmt(totalDeducted)}</strong></span>
+     <span>총 잔액: <strong style="color:#1b5e20">${fmt(totalRemaining)}</strong></span>`
+  tbody.innerHTML = rows.length ? rows.map(r =>
+    `<tr>
+      <td style="font-weight:600">${esc(r.name)}</td>
+      <td style="font-size:12px;color:#666">${r.period}</td>
+      <td>${fmt(r.original)}</td>
+      <td style="color:#e65100">${fmt(r.deducted)}</td>
+      <td style="color:#1b5e20;font-weight:600">${fmt(r.remaining)}</td>
+      <td style="max-width:200px">${r.history}</td>
+    </tr>`
+  ).join('') : '<tr><td colspan="6">보증금 내역이 없습니다.</td></tr>'
+}
+
+/* Prepaid (선수금) */
+function populatePrepaidFilter() {
+  const sel = document.getElementById('prepaid-unit-filter')
+  if (!sel) return
+  const current = sel.value
+  sel.innerHTML = '<option value="">전체 세대</option>'
+  Store.getUnits().forEach(u => {
+    sel.innerHTML += `<option value="${u.id}" ${String(u.id) === current ? 'selected' : ''}>${esc(u.name)}</option>`
+  })
+  if (current) sel.value = current
+}
+
+function renderPrepaids() {
+  const tbody = document.getElementById('prepaid-tbody')
+  const filter = document.getElementById('prepaid-unit-filter')
+  let list = Store.getPrepaids()
+  const fid = filter ? parseInt(filter.value) || 0 : 0
+  if (fid) list = list.filter(p => p.unitId === fid)
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5">선수금 내역이 없습니다.</td></tr>'
+    return
+  }
+  list.sort((a, b) => b.id - a.id)
+  tbody.innerHTML = list.map(p => {
+    const unit = Store.getUnits().find(u => u.id === p.unitId)
+    return `<tr>
+      <td>${unit ? esc(unit.name) : '알 수 없음'}</td>
+      <td>${fmt(p.amount)}</td>
+      <td>${fmt(p.balance)}</td>
+      <td>${p.createdAt || '-'}</td>
+      <td><button class="btn btn-secondary" onclick="deletePrepaid(${p.id})" style="padding:4px 8px;font-size:12px">삭제</button></td>
+    </tr>`
+  }).join('')
+}
+
+/** 선수금 삭제 */
+function deletePrepaid(id) {
+  if (!confirm('선수금 기록을 삭제하시겠습니까?')) return
+  Store.deletePrepaid(id)
+  renderAll()
+  updateStats()
 }
 
 /** 수납 삭제 → 해당 청구 상태 재계산 */
@@ -429,6 +594,7 @@ function deletePayment(id) {
   if (!confirm('입금 기록을 삭제하시겠습니까?')) return
   const p = Store.getPayments().find(py => py.id === id)
   if (!p) return
+  if (p.source && p.source !== 'manual') return alert('선수금/보증금 차감 내역은 삭제할 수 없습니다.')
   Store.deletePayment(id)
   const bill = Store.getBills().find(b => b.id === p.billId)
   if (bill) {
@@ -497,6 +663,8 @@ function updateStats() {
   const overdue60 = overdue.filter(o => o.overdueDays >= 60).length
   document.getElementById('stat-overdue30').textContent = overdue30
   document.getElementById('stat-overdue60').textContent = overdue60
+  const totalPrepaid = (Store.getPrepaids() || []).reduce((s, p) => s + p.balance, 0)
+  document.getElementById('stat-prepaid').textContent = fmt(totalPrepaid)
 }
 
 /* Dashboard - contract status — 대시보드 세대별 계약현황 테이블 */
@@ -699,6 +867,39 @@ function showModal(type, editData) {
       })
       break
     }
+    case 'prepaid': {
+      title.textContent = '선수금 등록'
+      const units = Store.getUnits()
+      body.innerHTML = `
+        <div class="form-group"><label>세대</label><select id="f-prepaid-unit">${
+          units.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')
+        }</select></div>
+        <div class="form-group"><label>입금액</label><input id="f-prepaid-amount" type="text" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
+        <div class="form-group"><label>입금일</label><input id="f-prepaid-date" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
+        <div class="form-group"><label>메모</label><input id="f-prepaid-memo" placeholder="선수금 사유 (선택)"></div>
+      `
+      break
+    }
+    case 'deposit-deduction': {
+      title.textContent = '보증금 차감'
+      const units = Store.getUnits()
+      const contracts = Store.getContracts().filter(c => c.status === 'active')
+      body.innerHTML = `
+        <div class="form-group"><label>세대</label><select id="f-dd-unit" onchange="updateDeductionInfo()">${
+          units.map(u => {
+            const c = contracts.find(ct => ct.unitId === u.id)
+            const dep = c ? fmt(c.deposit || 0) : '0원'
+            return `<option value="${u.id}" data-deposit="${c ? c.deposit || 0 : 0}">${esc(u.name)} (보증금 ${dep})</option>`
+          }).join('')
+        }</select></div>
+        <div id="dd-info" style="font-size:13px;color:#555;margin-bottom:12px;padding:8px;background:#f5f5f5;border-radius:4px"></div>
+        <div class="form-group"><label>차감 금액</label><input id="f-dd-amount" type="text" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
+        <div class="form-group"><label>차감일</label><input id="f-dd-date" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
+        <div class="form-group"><label>사유</label><input id="f-dd-memo" placeholder="연체 보증금 차감"></div>
+        <div style="font-size:11px;color:#888;margin-top:4px">차감 시 해당 세대의 연체 청구건에 입금 처리되며, 계약 보증금에서 차감됩니다.</div>
+      `
+      break
+    }
     case 'bill-detail': {
       title.textContent = '청구 상세 내역'
       const b = editData
@@ -711,6 +912,9 @@ function showModal(type, editData) {
       const hasDiscount = elecDiscount > 0 || waterDiscountPct > 0
       const row = (label, value) => `<tr><td style="padding:4px 12px;border-bottom:1px solid #eee">${label}</td><td style="padding:4px 12px;border-bottom:1px solid #eee;text-align:right">${value}</td></tr>`
       const section = (title) => `<tr><td colspan="2" style="padding:6px 12px;background:#f5f5f5;font-weight:600;font-size:13px">${title}</td></tr>`
+      const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
+      const depositAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'deposit').reduce((s, p) => s + p.amount, 0)
+      const actualDue = b.total - prepaidAmt - depositAmt
       body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
         ${section('세대 정보')}
         ${row('세대', esc(unit ? unit.name : '알 수 없음'))}
@@ -731,6 +935,9 @@ function showModal(type, editData) {
         ${row('TV수신료', fmt(b.tvFee))}
         ${row('연체료', fmt(b.lateFee))}
         ${row('<strong>합계</strong>', '<strong>' + fmt(b.total) + '</strong>')}
+        ${prepaidAmt > 0 ? row('선수금 차감', '<span style="color:#388e3c">-' + fmt(prepaidAmt) + '</span>') : ''}
+        ${depositAmt > 0 ? row('보증금 차감', '<span style="color:#e65100">-' + fmt(depositAmt) + '</span>') : ''}
+        ${(prepaidAmt > 0 || depositAmt > 0) ? row('<strong>실 납부액</strong>', '<strong>' + fmt(actualDue) + '</strong>') : ''}
       </table>`
       break
     }
@@ -819,6 +1026,19 @@ function showModal(type, editData) {
       break
     }
   }
+}
+
+/** 보증금 차감 모달 - 세대 선택 시 연체 정보 업데이트 */
+function updateDeductionInfo() {
+  const sel = document.getElementById('f-dd-unit')
+  const info = document.getElementById('dd-info')
+  if (!sel || !info) return
+  const uid = parseInt(sel.value)
+  const opt = sel.selectedOptions[0]
+  const deposit = parseInt(opt.dataset.deposit) || 0
+  const overdue = Store.getOverdueBills(uid)
+  const totalOverdue = overdue.reduce((s, o) => s + o.unpaid, 0)
+  info.innerHTML = `보증금: <strong>${fmt(deposit)}</strong> | 연체 합계: <strong style="color:${totalOverdue > 0 ? '#d32f2f' : '#388e3c'}">${fmt(totalOverdue)}</strong>`
 }
 
 /** 모달 닫기 (overlay 클릭 또는 직접 호출) */
@@ -925,12 +1145,62 @@ function saveModal() {
         billId,
         amount: parseInt(document.getElementById('f-pamount').value.replace(/,/g, '')) || 0,
         date: document.getElementById('f-pdate').value,
+        source: 'manual',
       }
       if (data.amount <= 0) return alert('납부액을 입력하세요.')
       Store.addPayment(data)
       const totalPaid = Store.getPayments().filter(p => p.billId === billId).reduce((s, p) => s + p.amount, 0)
       if (totalPaid >= bill.total) Store.updateBill(billId, { status: 'paid' })
       else Store.updateBill(billId, { status: 'pending' })
+      break
+    }
+    case 'prepaid': {
+      const unitId = parseInt(document.getElementById('f-prepaid-unit').value)
+      const amount = parseInt(document.getElementById('f-prepaid-amount').value.replace(/,/g, '')) || 0
+      if (amount <= 0) return alert('입금액을 입력하세요.')
+      Store.addPrepaid({
+        unitId,
+        amount,
+        balance: amount,
+        date: document.getElementById('f-prepaid-date').value,
+        memo: document.getElementById('f-prepaid-memo').value.trim(),
+      })
+      break
+    }
+    case 'deposit-deduction': {
+      const unitId = parseInt(document.getElementById('f-dd-unit').value)
+      const amount = parseInt(document.getElementById('f-dd-amount').value.replace(/,/g, '')) || 0
+      if (amount <= 0) return alert('차감 금액을 입력하세요.')
+      const date = document.getElementById('f-dd-date').value
+      const memo = document.getElementById('f-dd-memo').value.trim()
+      const contract = Store.getContracts().find(c => c.unitId === unitId && c.status === 'active')
+      if (!contract) return alert('계약중인 세대가 아닙니다.')
+      const deposit = contract.deposit || 0
+      if (amount > deposit) return alert(`보증금(${fmt(deposit)})보다 큰 금액을 차감할 수 없습니다.`)
+      const overdueBills = Store.getOverdueBills(unitId)
+      let remaining = amount
+      for (const ob of overdueBills) {
+        if (remaining <= 0) break
+        const deduct = Math.min(remaining, ob.unpaid)
+        Store.addPayment({
+          unitId,
+          billId: ob.bill.id,
+          amount: deduct,
+          date,
+          source: 'deposit',
+          memo: memo || '보증금 차감',
+        })
+        remaining -= deduct
+        if (Store.getPaidTotal(ob.bill.id) >= ob.bill.total) {
+          Store.updateBill(ob.bill.id, { status: 'paid' })
+        } else {
+          Store.updateBill(ob.bill.id, { status: 'pending' })
+        }
+      }
+      contract.deposit -= amount
+      Store.addDepositDeduction({ unitId, amount, date, memo, contractId: contract.id })
+      Store.save()
+      if (remaining > 0) alert(`차감 후 ${fmt(remaining)}원이 남았습니다. 보증금 잔액이 부족합니다.`)
       break
     }
     case 'notice': {
@@ -1073,7 +1343,9 @@ function generateBills() {
     }
 
     const total = rent + maintenanceFee + Math.round(elecAfter) + Math.round(waterAfter) + commonFee + tvFee + late
-    Store.addBill({
+    const billId = Store._nextId()
+    Store._data.bills.push({
+      id: billId,
       unitId: u.id,
       yearMonth: ym,
       rent,
@@ -1089,7 +1361,29 @@ function generateBills() {
       waterUsage,
       welfareType: welfareId,
     })
+    const prepaidBalance = Store.getPrepaidBalance(u.id)
+    if (prepaidBalance > 0) {
+      const deduct = Math.min(total, prepaidBalance)
+      Store.deductPrepaid(u.id, deduct)
+      Store._data.payments.push({
+        id: Store._nextId(),
+        unitId: u.id,
+        billId,
+        amount: deduct,
+        date: new Date().toISOString().slice(0, 10),
+        source: 'prepaid',
+      })
+      const paid = Store.getPaidTotal(billId)
+      if (paid >= total) {
+        const idx = Store._data.bills.findIndex(b => b.id === billId)
+        if (idx > -1) Store._data.bills[idx].status = 'paid'
+      } else if (paid > 0) {
+        const idx = Store._data.bills.findIndex(b => b.id === billId)
+        if (idx > -1) Store._data.bills[idx].status = 'pending'
+      }
+    }
   }
+  Store.save()
   renderAll()
   updateStats()
   alert(`${ym} 청구서가 생성되었습니다.`)
@@ -1266,6 +1560,12 @@ function previewBillPrint() {
         <tr><td>TV수신료</td><td class="right">${fmt(b.tvFee)}</td></tr>
         <tr><td>연체료</td><td class="right">${fmt(b.lateFee)}</td></tr>
         <tr><td style="font-weight:700;font-size:9pt">합계</td><td style="font-weight:700;font-size:9pt;text-align:right">${fmt(b.total)}</td></tr>
+        ${(() => {
+          const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
+          if (prepaidAmt <= 0) return ''
+          return `<tr><td>선수금 차감</td><td class="right" style="color:#388e3c">-${fmt(prepaidAmt)}</td></tr>
+        <tr><td style="font-weight:700;font-size:9pt">실 납부액</td><td style="font-weight:700;font-size:9pt;text-align:right">${fmt(b.total - prepaidAmt)}</td></tr>`
+        })()}
       </table>
       </div>
       <div class="footer">
