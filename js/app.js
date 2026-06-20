@@ -669,13 +669,14 @@ function renderUsers() {
   if (q) users = users.filter(u => (u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q))
   const units = Store.getUnits()
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="8">등록된 사용자가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="9">등록된 사용자가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = users.map(u => {
     const roleLabel = { admin: '관리자', manager: '매니저', tenant: '입주자' }[u.role] || u.role
     const unitName = u.unitId ? (units.find(x => x.id === u.unitId)?.name || '-') : '-'
     const canDelete = currentUser && currentUser.id !== u.id
+    const isPending = u.status !== 'active'
     return `<tr>
       <td style="font-weight:600">${esc(u.username)}</td>
       <td>${esc(u.name || '-')}</td>
@@ -683,13 +684,20 @@ function renderUsers() {
       <td>${esc(u.phone || '-')}</td>
       <td><span class="badge ${u.role === 'admin' ? 'badge-paid' : u.role === 'manager' ? 'badge-pending' : 'badge-unpaid'}">${roleLabel}</span></td>
       <td>${unitName}</td>
+      <td>${isPending ? '<span class="badge badge-unpaid">승인대기</span>' : '<span class="badge badge-paid">활성</span>'}</td>
       <td style="font-size:12px;color:#888">${u.createdAt || '-'}</td>
-      <td>
+      <td style="white-space:nowrap">
+        ${isPending ? `<button class="btn btn-primary" onclick="approveUser(${u.id})" style="padding:4px 8px;font-size:12px">승인</button>` : ''}
         <button class="btn btn-secondary" onclick="editUser(${u.id})" style="padding:4px 8px;font-size:12px">수정</button>
         ${canDelete ? `<button class="btn btn-secondary" onclick="deleteUser(${u.id})" style="padding:4px 8px;font-size:12px">삭제</button>` : ''}
       </td>
     </tr>`
   }).join('')
+}
+
+function approveUser(id) {
+  Store.updateUser(id, { status: 'active' })
+  renderAll()
 }
 
 function editUser(id) {
@@ -1182,13 +1190,6 @@ function showModal(type, editData) {
           <option value="">선택 안함</option>
           ${units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
         </select></div>
-        ${isEdit ? '' : `
-        <div class="form-group"><label>비밀번호 찾기 질문</label><select id="f-u-q">
-          <option value="가장 좋아하는 색깔은?">가장 좋아하는 색깔은?</option>
-          <option value="출신 초등학교 이름은?">출신 초등학교 이름은?</option>
-          <option value="가장 기억에 남는 여행지는?">가장 기억에 남는 여행지는?</option>
-        </select></div>
-        <div class="form-group"><label>비밀번호 찾기 답변</label><input id="f-u-a"></div>`}
       `
       break
     }
@@ -1411,12 +1412,9 @@ function saveModal() {
       if (!isEdit) {
         if (!pw || pw.length < 4) return alert('비밀번호는 4자리 이상 입력하세요.')
         if (Store.getUsers().find(u => u.username === username)) return alert('이미 사용 중인 아이디입니다.')
-        const q = document.getElementById('f-u-q').value
-        const a = document.getElementById('f-u-a').value.trim()
         Store.addUser({
           username, password: btoa(pw), name, email, phone, role, unitId,
-          securityQuestion: q || '',
-          securityAnswer: a ? btoa(a) : '',
+          status: 'active',
         })
       } else {
         const data = { name, email, phone, role, unitId }

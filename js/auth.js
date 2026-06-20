@@ -12,6 +12,7 @@ function ensureAdmin() {
       phone: '',
       role: 'admin',
       unitId: null,
+      status: 'active',
       securityQuestion: '가장 좋아하는 색깔은?',
       securityAnswer: btoa('admin'),
     })
@@ -63,8 +64,7 @@ function register(data) {
     phone: data.phone,
     role: data.role || 'tenant',
     unitId: data.unitId || null,
-    securityQuestion: data.securityQuestion || '',
-    securityAnswer: data.securityAnswer ? hashPw(data.securityAnswer) : '',
+    status: 'pending',
   })
   return { ok: true }
 }
@@ -77,6 +77,7 @@ function login(username, password) {
   const user = Store.findUserByUsername(username)
   if (!user) return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
   if (user.password !== hashPw(password)) return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
+  if (user.status !== 'active') return { error: '관리자 승인 대기 중입니다. 관리자에게 문의하세요.' }
   setSession(user)
   return { ok: true, user }
 }
@@ -91,24 +92,10 @@ function findId(email) {
   return { ok: true, username: user.username, createdAt: user.createdAt }
 }
 
-function findPassword(username) {
-  const user = Store.findUserByUsername(username)
-  if (!user) return { error: '등록된 아이디가 없습니다.' }
-  return { ok: true, question: user.securityQuestion }
-}
-
-function verifySecurityAnswer(username, answer) {
-  const user = Store.findUserByUsername(username)
-  if (!user) return { error: '등록된 아이디가 없습니다.' }
-  if (user.securityAnswer !== hashPw(answer)) return { error: '답변이 일치하지 않습니다.' }
-  return { ok: true, password: user.password }
-}
-
-function resetPassword(username, newPassword) {
-  const user = Store.findUserByUsername(username)
-  if (!user) return { error: '등록된 아이디가 없습니다.' }
-  Store.updateUser(user.id, { password: hashPw(newPassword) })
-  return { ok: true }
+function findPassword(name, email) {
+  const user = Store.getUsers().find(u => u.name === name && u.email === email)
+  if (!user) return { error: '등록된 이름과 이메일이 일치하는 계정이 없습니다.' }
+  return { ok: true, password: atob(user.password) }
 }
 
 function isAdmin() { return currentUser && currentUser.role === 'admin' }
@@ -183,17 +170,7 @@ function switchAuthTab(tab) {
           <div><label style="font-size:12px;color:#888">이름 *</label><input id="af-reg-name" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
           <div><label style="font-size:12px;color:#888">이메일 * (아이디/비번 찾기에 사용)</label><input id="af-reg-email" type="email" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
           <div><label style="font-size:12px;color:#888">연락처</label><input id="af-reg-phone" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
-          <div><label style="font-size:12px;color:#888">비밀번호 찾기 질문 *</label>
-            <select id="af-reg-q" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-              <option value="가장 좋아하는 색깔은?">가장 좋아하는 색깔은?</option>
-              <option value="출신 초등학교 이름은?">출신 초등학교 이름은?</option>
-              <option value="가장 기억에 남는 여행지는?">가장 기억에 남는 여행지는?</option>
-              <option value="어머니 성함은?">어머니 성함은?</option>
-              <option value="반려동물 이름은?">반려동물 이름은?</option>
-            </select>
-          </div>
-          <div><label style="font-size:12px;color:#888">비밀번호 찾기 답변 *</label><input id="af-reg-a" type="text" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></div>
-          <button onclick="doRegister()" style="margin-top:4px;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">가입하기</button>
+          <button onclick="doRegister()" style="margin-top:4px;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">가입 신청</button>
           <p id="af-reg-err" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
           <div style="text-align:center;font-size:13px">이미 계정이 있으신가요? <a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인</a></div>
         </div>
@@ -212,25 +189,12 @@ function switchAuthTab(tab) {
     findPw: `
       <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.2)">
         <h2 style="margin:0 0 20px;font-size:18px">비밀번호 찾기</h2>
-        <div id="af-findpw-step1" style="display:flex;flex-direction:column;gap:10px">
-          <input id="af-findpw-id" type="text" placeholder="아이디" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-          <button onclick="doFindPwStep1()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">다음</button>
-          <p id="af-findpw-err" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
-          <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
-        </div>
-        <div id="af-findpw-step2" style="display:none;flex-direction:column;gap:10px">
-          <p id="af-findpw-q" style="font-size:13px;color:#666;margin:0"></p>
-          <input id="af-findpw-a" type="text" placeholder="답변" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-          <button onclick="doFindPwStep2()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">확인</button>
-          <p id="af-findpw-err2" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
-          <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
-        </div>
-        <div id="af-findpw-step3" style="display:none;flex-direction:column;gap:10px">
-          <p style="font-size:13px;color:#666;margin:0">새 비밀번호를 입력하세요.</p>
-          <input id="af-findpw-npw" type="password" placeholder="새 비밀번호" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-          <input id="af-findpw-npw2" type="password" placeholder="새 비밀번호 확인" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-          <button onclick="doFindPwStep3()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">비밀번호 변경</button>
-          <p id="af-findpw-err3" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <p style="font-size:13px;color:#666;margin:0">가입 시 등록한 이름과 이메일을 입력하세요.</p>
+          <input id="af-findpw-name" type="text" placeholder="이름" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <input id="af-findpw-email" type="email" placeholder="이메일" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <button onclick="doFindPw()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">비밀번호 확인</button>
+          <div id="af-findpw-rs" style="font-size:13px;margin:0;display:none;padding:10px;background:#f5f5f5;border-radius:6px;word-break:break-all"></div>
           <div style="text-align:center;font-size:13px"><a href="#" onclick="switchAuthTab('login');return false" style="color:#1a73e8;text-decoration:none">로그인으로 돌아가기</a></div>
         </div>
       </div>`,
@@ -263,19 +227,18 @@ function doRegister() {
   const name = document.getElementById('af-reg-name').value.trim()
   const email = document.getElementById('af-reg-email').value.trim()
   const phone = document.getElementById('af-reg-phone').value.trim()
-  const q = document.getElementById('af-reg-q').value
-  const a = document.getElementById('af-reg-a').value.trim()
   const err = document.getElementById('af-reg-err')
   if (!id) { err.textContent = '아이디를 입력하세요.'; err.style.display = 'block'; return }
   if (!pw || pw.length < 4) { err.textContent = '비밀번호는 4자리 이상 입력하세요.'; err.style.display = 'block'; return }
   if (pw !== pw2) { err.textContent = '비밀번호가 일치하지 않습니다.'; err.style.display = 'block'; return }
   if (!name) { err.textContent = '이름을 입력하세요.'; err.style.display = 'block'; return }
   if (!email) { err.textContent = '이메일을 입력하세요.'; err.style.display = 'block'; return }
-  if (!a) { err.textContent = '비밀번호 찾기 답변을 입력하세요.'; err.style.display = 'block'; return }
-  const r = register({ username: id, password: pw, name, email, phone, role: 'tenant', unitId: null, securityQuestion: q, securityAnswer: a })
+  const r = register({ username: id, password: pw, name, email, phone, role: 'tenant', unitId: null })
   if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
-  err.style.display = 'none'
-  switchAuthTab('login')
+  err.style.color = '#137333'
+  err.textContent = '가입 신청이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.'
+  err.style.display = 'block'
+  document.querySelector('#auth-overlay > div > div > button')?.remove()
 }
 
 function checkIdDup() {
@@ -300,37 +263,16 @@ function doFindId() {
 
 let _findPwUsername = ''
 
-function doFindPwStep1() {
-  const id = document.getElementById('af-findpw-id').value.trim()
-  const err = document.getElementById('af-findpw-err')
-  if (!id) { err.textContent = '아이디를 입력하세요.'; err.style.display = 'block'; return }
-  const r = findPassword(id)
-  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
-  _findPwUsername = id
-  document.getElementById('af-findpw-q').textContent = '질문: ' + r.question
-  document.getElementById('af-findpw-step1').style.display = 'none'
-  document.getElementById('af-findpw-step2').style.display = 'flex'
-}
-
-function doFindPwStep2() {
-  const a = document.getElementById('af-findpw-a').value.trim()
-  const err = document.getElementById('af-findpw-err2')
-  if (!a) { err.textContent = '답변을 입력하세요.'; err.style.display = 'block'; return }
-  const r = verifySecurityAnswer(_findPwUsername, a)
-  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
-  document.getElementById('af-findpw-step2').style.display = 'none'
-  document.getElementById('af-findpw-step3').style.display = 'flex'
-}
-
-function doFindPwStep3() {
-  const npw = document.getElementById('af-findpw-npw').value
-  const npw2 = document.getElementById('af-findpw-npw2').value
-  const err = document.getElementById('af-findpw-err3')
-  if (!npw || npw.length < 4) { err.textContent = '비밀번호는 4자리 이상 입력하세요.'; err.style.display = 'block'; return }
-  if (npw !== npw2) { err.textContent = '비밀번호가 일치하지 않습니다.'; err.style.display = 'block'; return }
-  const r = resetPassword(_findPwUsername, npw)
-  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
-  document.getElementById('af-findpw-step3').innerHTML = '<p style="color:#137333;font-size:14px;text-align:center">비밀번호가 변경되었습니다.</p><div style="text-align:center;margin-top:10px"><a href="#" onclick="switchAuthTab(\'login\');return false" style="color:#1a73e8;text-decoration:none">로그인하기</a></div>'
+function doFindPw() {
+  const name = document.getElementById('af-findpw-name').value.trim()
+  const email = document.getElementById('af-findpw-email').value.trim()
+  const rs = document.getElementById('af-findpw-rs')
+  if (!name) { rs.textContent = '이름을 입력하세요.'; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
+  if (!email) { rs.textContent = '이메일을 입력하세요.'; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
+  const r = findPassword(name, email)
+  if (r.error) { rs.textContent = r.error; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
+  rs.innerHTML = `<div style="font-size:12px;color:#666;margin-bottom:4px">비밀번호</div><div style="font-size:16px;font-weight:600;color:#1a73e8;letter-spacing:1px">${r.password}</div>`
+  rs.style.color = '#137333'; rs.style.display = 'block'
 }
 
 // --- UI integration ---
