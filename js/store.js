@@ -46,6 +46,10 @@ const Store = {
   // Meters
   getMeters() { return this._data.meters },
   addMeter(m) { this._data.meters.push({ id: Date.now(), ...m }); this.save() },
+  updateMeter(id, data) {
+    const idx = this._data.meters.findIndex(m => m.id === id)
+    if (idx > -1) { this._data.meters[idx] = { ...this._data.meters[idx], ...data }; this.save() }
+  },
 
   // Bills
   getBills() { return this._data.bills },
@@ -62,4 +66,8 @@ const Store = {
   // Notices
   getNotices() { return this._data.notices },
   addNotice(n) { this._data.notices.push({ id: Date.now(), ...n }); this.save() },
+  updateNotice(id, data) {
+    const idx = this._data.notices.findIndex(n => n.id === id)
+    if (idx > -1) { this._data.notices[idx] = { ...this._data.notices[idx], ...data }; this.save() }
+  },
 }

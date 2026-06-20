@@ -78,6 +78,7 @@ function renderMeters() {
       <td>${m.electricity || 0}</td>
       <td>${m.water || 0}</td>
       <td>
+        <button class="btn btn-secondary" onclick="editMeter(${m.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteMeter(${m.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
     </tr>`
@@ -148,6 +149,7 @@ function renderNotices() {
       <td>${n.date}</td>
       <td><span class="badge ${n.sent ? 'badge-paid' : 'badge-pending'}">${n.sent ? '발송완료' : '미발송'}</span></td>
       <td>
+        ${n.sent ? '' : `<button class="btn btn-primary" onclick="sendNotice(${n.id})" style="padding:4px 8px;font-size:12px">발송</button>`}
         <button class="btn btn-secondary" onclick="deleteNotice(${n.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
     </tr>
@@ -212,14 +214,15 @@ function showModal(type, editData) {
     }
     case 'meter': {
       const units = Store.getUnits()
-      title.textContent = '검침 입력'
+      const isEdit = !!editData
+      title.textContent = isEdit ? '검침 수정' : '검침 입력'
       body.innerHTML = `
         <div class="form-group"><label>세대</label><select id="f-unit">${
-          units.map(u => `<option value="${u.id}">${u.name}</option>`).join('')
+          units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${u.name}</option>`).join('')
         }</select></div>
-        <div class="form-group"><label>검침일</label><input id="f-date" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
-        <div class="form-group"><label>전기 (kWh)</label><input id="f-elec" type="number" step="0.1"></div>
-        <div class="form-group"><label>수도 (m³)</label><input id="f-water" type="number" step="0.1"></div>
+        <div class="form-group"><label>검침일</label><input id="f-date" type="date" value="${editData ? editData.date : new Date().toISOString().slice(0, 10)}"></div>
+        <div class="form-group"><label>전기 (kWh)</label><input id="f-elec" type="number" step="0.1" value="${editData ? editData.electricity : ''}"></div>
+        <div class="form-group"><label>수도 (m³)</label><input id="f-water" type="number" step="0.1" value="${editData ? editData.water : ''}"></div>
       `
       break
     }
@@ -294,7 +297,8 @@ function saveModal() {
         electricity: parseFloat(document.getElementById('f-elec').value) || 0,
         water: parseFloat(document.getElementById('f-water').value) || 0,
       }
-      Store.addMeter(data)
+      if (state.editingId) Store.updateMeter(state.editingId, data)
+      else Store.addMeter(data)
       break
     }
     case 'payment': {
@@ -335,6 +339,11 @@ function editUnit(id) {
   if (unit) showModal('building', unit)
 }
 
+function editMeter(id) {
+  const meter = Store.getMeters().find(m => m.id === id)
+  if (meter) showModal('meter', meter)
+}
+
 function deleteUnit(id) {
   if (!confirm('정말 삭제하시겠습니까?')) return
   Store.deleteUnit(id)
@@ -346,6 +355,13 @@ function deleteMeter(id) {
   Store._data.meters = Store.getMeters().filter(m => m.id !== id)
   Store.save()
   renderAll()
+}
+
+function sendNotice(id) {
+  if (!confirm('공지를 전체 세대에 발송하시겠습니까?')) return
+  Store.updateNotice(id, { sent: true, sentAt: new Date().toISOString() })
+  renderAll()
+  alert('공지가 발송되었습니다.')
 }
 
 function deleteNotice(id) {
@@ -362,6 +378,9 @@ function generateBills() {
   if (existing.length) {
     if (!confirm(`${ym} 청구가 이미 ${existing.length}건 있습니다. 다시 생성하시겠습니까?`)) return
   }
+  const commonInput = prompt('세대당 공용관리비를 입력하세요 (원, 0이면 미부과):', '0')
+  if (commonInput === null) return
+  const commonFeePerUnit = parseInt(commonInput) || 0
   for (const u of units) {
     if (Store.getBills().find(b => b.unitId === u.id && b.yearMonth === ym)) continue
     const meters = Store.getMeters().filter(m => m.unitId === u.id)
@@ -375,7 +394,8 @@ function generateBills() {
       waterCost = Math.round(waterUsage * 800)
     }
     const late = 0
-    const total = u.rent + u.maintenanceFee + elecCost + waterCost + late
+    const commonFee = commonFeePerUnit
+    const total = u.rent + u.maintenanceFee + elecCost + waterCost + commonFee + late
     Store.addBill({
       unitId: u.id,
       yearMonth: ym,
@@ -383,7 +403,7 @@ function generateBills() {
       maintenanceFee: u.maintenanceFee,
       electricity: elecCost,
       water: waterCost,
-      commonFee: 0,
+      commonFee,
       lateFee: late,
       total,
       status: 'unpaid',
