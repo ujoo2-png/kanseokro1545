@@ -758,7 +758,8 @@ function showModal(type, editData) {
       const orphanMeters = (editData && editData.orphanMeters) || []
       const noMeterUnits = (editData && editData.noMeterUnits) || []
       const badPayments = (editData && editData.badPayments) || []
-      if (!orphanMeters.length && !noMeterUnits.length && !badPayments.length) {
+      const badBills = (editData && editData.badBills) || []
+      if (!orphanMeters.length && !noMeterUnits.length && !badPayments.length && !badBills.length) {
         body.innerHTML = '<p>문제가 없습니다.</p>'; break
       }
       let html = ''
@@ -776,13 +777,24 @@ function showModal(type, editData) {
         const bUnits = [...new Set(badPayments.map(p => p.unitId))].map(id => Store.getUnits().find(u => u.id === id)).filter(Boolean)
         html += `<p style="margin:0 0 4px;font-size:13px;color:#d32f2f">수납-청구건 세대 불일치 ${badPayments.length}건</p>
         <div style="margin-bottom:4px;font-size:12px"><strong>영향받은 세대:</strong> ${bUnits.map(u => esc(u.name)).join(', ')}</div>
-        <div style="font-size:11px;color:#888;margin-bottom:8px">입금 등록 시 선택한 세대와 청구건의 세대가 다른 경우입니다. [자동 수정] 버튼을 누르면 청구건 기준으로 세대를 맞춥니다.</div>`
+        <div style="font-size:11px;color:#888;margin-bottom:8px">입금 등록 시 선택한 세대와 청구건의 세대가 다른 경우입니다.</div>`
+      }
+      if (badBills.length) {
+        html += `<p style="margin:0 0 4px;font-size:13px;color:#c5221f">청구서-세대 불일치 ${badBills.length}건</p>
+        <div style="margin-bottom:4px;font-size:12px"><strong>내용:</strong><br>`
+        html += badBills.map(b => {
+          const unit = Store.getUnits().find(u => u.id === b.unitId)
+          return `&nbsp;• ${b.yearMonth} - ${unit ? esc(unit.name) : '세대ID:' + b.unitId} - ${fmt(b.total)}`
+        }).join('<br>')
+        html += `</div>
+        <div style="font-size:11px;color:#888;margin-bottom:8px">청구서의 세대(unitId)가 존재하지 않거나 계약중이 아닌 경우입니다. [청구 재생성] 후 "일괄 청구 생성"을 다시 실행하세요.</div>`
       }
       body.innerHTML = html + `
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn btn-secondary" onclick="closeModal()" style="flex:1">취소</button>
           ${orphanMeters.length ? '<button class="btn btn-primary" onclick="deleteOrphanMeters()" style="flex:1;background:#d32f2f">고아 검침 삭제</button>' : ''}
           ${badPayments.length ? '<button class="btn btn-primary" onclick="fixBadPayments()" style="flex:1;background:#e65100">수납 불일치 자동 수정</button>' : ''}
+          ${badBills.length ? '<button class="btn btn-primary" onclick="clearBadBills()" style="flex:1;background:#c5221f">잘못된 청구 일괄 삭제</button>' : ''}
         </div>
       `
       break
@@ -1083,6 +1095,18 @@ function generateBills() {
   alert(`${ym} 청구서가 생성되었습니다.`)
 }
 
+/** 전체 청구 데이터 삭제 후 재생성 안내 */
+function clearAllBills() {
+  const count = Store.getBills().length
+  if (!count) return alert('삭제할 청구 데이터가 없습니다.')
+  if (!confirm(`모든 청구 데이터(${count}건)를 삭제하시겠습니까? 삭제 후 "일괄 청구 생성"을 다시 실행해야 합니다.`)) return
+  Store._data.bills = []
+  Store.save()
+  renderAll()
+  updateStats()
+  alert('모든 청구 데이터가 삭제되었습니다. "일괄 청구 생성" 버튼을 눌러 새로 생성하세요.')
+}
+
 /** 청구 상세 모달 열기 (사용량/복지할인 포함) */
 function showBillDetail(id) {
   const bill = Store.getBills().find(b => b.id === id)
@@ -1096,7 +1120,7 @@ function showMeterInput(unitId) {
   showModal('meter', { unitId })
 }
 
-/** 정합성 검토 — 계약중 아닌 세대 검침 + 수납-청구건 불일치 찾기 */
+/** 정합성 검토 — 계약/검침/청구/수납 전체 데이터 정합성 */
 function checkMeterIntegrity() {
   const allMeters = Store.getMeters()
   const activeContracts = Store.getContracts().filter(c => c.status === 'active')
@@ -1109,11 +1133,18 @@ function checkMeterIntegrity() {
     const bill = Store.getBills().find(b => b.id === p.billId)
     return bill && bill.unitId !== p.unitId
   })
-  if (!orphanMeters.length && !noMeterUnits.length && !badPayments.length) {
+
+  const badBills = Store.getBills().filter(b => {
+    const unit = Store.getUnits().find(u => u.id === b.unitId)
+    const contract = Store.getContracts().find(c => c.unitId === b.unitId && c.status === 'active')
+    return !unit || !contract
+  })
+
+  if (!orphanMeters.length && !noMeterUnits.length && !badPayments.length && !badBills.length) {
     alert('모든 데이터가 정상입니다.')
     return
   }
-  showModal('integrity-check', { orphanMeters, noMeterUnits, badPayments })
+  showModal('integrity-check', { orphanMeters, noMeterUnits, badPayments, badBills })
 }
 
 /** 고아 검침 데이터 일괄 삭제 (계약중 아닌 세대) */
@@ -1128,6 +1159,24 @@ function deleteOrphanMeters() {
   closeModal()
   renderAll()
   alert(`${deleted}건의 검침 데이터가 삭제되었습니다.`)
+}
+
+/** unitId가 잘못된 청구 데이터 일괄 삭제 */
+function clearBadBills() {
+  const badBills = Store.getBills().filter(b => {
+    const unit = Store.getUnits().find(u => u.id === b.unitId)
+    const contract = Store.getContracts().find(c => c.unitId === b.unitId && c.status === 'active')
+    return !unit || !contract
+  })
+  if (!badBills.length) return
+  if (!confirm(`${badBills.length}건의 잘못된 청구를 삭제하고 새로 생성하시겠습니까?`)) return
+  const ids = new Set(badBills.map(b => b.id))
+  Store._data.bills = Store.getBills().filter(b => !ids.has(b.id))
+  Store.save()
+  closeModal()
+  renderAll()
+  updateStats()
+  alert(`${badBills.length}건 삭제 완료. "일괄 청구 생성" 버튼으로 새로 생성하세요.`)
 }
 
 /** 수납-청구건 불일치 데이터 자동 수정 */

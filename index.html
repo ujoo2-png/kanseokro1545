@@ -171,11 +171,12 @@
         <div id="page-billing" class="page">
           <div class="card">
             <div class="card-header">
-              <h3>청구서 생성</h3>
-              <div style="display:flex;gap:8px">
-                <button class="btn btn-secondary" onclick="previewBillPrint()" style="font-size:12px">명세서 출력</button>
-                <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
-              </div>
+                <h3>청구서 생성</h3>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-secondary" onclick="previewBillPrint()" style="font-size:12px">명세서 출력</button>
+                  <button class="btn btn-secondary" onclick="clearAllBills()" style="font-size:12px">청구 재생성</button>
+                  <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
+                </div>
             </div>
             <div style="display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid #eee;flex-wrap:wrap">
               <select id="bill-unit-filter" onchange="renderBills()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none">
