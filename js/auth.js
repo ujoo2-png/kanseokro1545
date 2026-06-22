@@ -138,10 +138,13 @@ function switchAuthTab(tab) {
   const html = {
     login: `
       <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto">
-        <h2 style="margin:0 0 20px;font-size:18px">로그인</h2>
+        <div style="text-align:center;margin-bottom:20px">
+          <h1 style="margin:0;font-size:22px;font-weight:700;color:#1a73e8">간석로1545</h1>
+          <p style="margin:4px 0 0;font-size:12px;color:#888">관리자 시스템 v1.10.0</p>
+        </div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <input id="af-id" type="text" placeholder="아이디" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
-          <input id="af-pw" type="password" placeholder="비밀번호" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none">
+          <input id="af-id" type="text" placeholder="아이디" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter') document.getElementById('af-pw').focus()">
+          <input id="af-pw" type="password" placeholder="비밀번호" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter') doLogin()">
           <button onclick="doLogin()" style="padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">로그인</button>
           <p id="af-err" style="color:#d32f2f;font-size:13px;margin:0;display:none"></p>
           <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px">
@@ -288,11 +291,11 @@ function applyAuthUI() {
     if (!user) { a.style.display = 'none'; return }
     if (user.role === 'admin') { a.style.display = 'block'; return }
     if (user.role === 'manager') {
-      a.style.display = ['dashboard', 'meter', 'billing', 'payment'].includes(page) ? 'block' : 'none'
+      a.style.display = ['dashboard', 'meter', 'billing', 'payment', 'inquiry'].includes(page) ? 'block' : 'none'
       return
     }
     if (user.role === 'tenant') {
-      a.style.display = page === 'dashboard' ? 'block' : 'none'
+      a.style.display = ['dashboard', 'inquiry'].includes(page) ? 'block' : 'none'
       return
     }
   })

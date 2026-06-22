@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>간석로1545 - 관리자</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app">
     <aside id="sidebar">
       <div class="sidebar-header" onclick="goHome()" style="cursor:pointer">
         <h1>간석로1545</h1>
-        <p class="subtitle">관리자 시스템 v1.9.0</p>
+        <p class="subtitle">관리자 시스템 v1.10.0</p>
       </div>
       <nav id="nav">
         <ul>
@@ -21,6 +21,7 @@
           <li><a href="#" data-page="billing">📄 청구서 생성</a></li>
           <li><a href="#" data-page="payment">💰 수납/미수금</a></li>
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
+          <li><a href="#" data-page="inquiry">📞 민원/문의</a></li>
           <li><a href="#" data-page="settings" style="display:none">⚙️ 설정</a></li>
         </ul>
       </nav>
@@ -301,6 +302,25 @@
           </div>
         </div>
 
+        <div id="page-inquiry" class="page">
+          <div class="card">
+            <div class="card-header">
+                <h3>민원/문의</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="inquiry-search" placeholder="제목 / 세대 검색..." oninput="renderInquiries()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                </div>
+            </div>
+            <table>
+              <thead>
+                <tr><th>제목</th><th>세대</th><th>작성자</th><th>작성일</th><th>상태</th><th>관리</th></tr>
+              </thead>
+              <tbody id="inquiry-tbody">
+                <tr><td colspan="6">민원/문의가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div id="page-settings" class="page">
           <div class="card">
             <div class="card-header">
@@ -336,10 +356,10 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="js/supabase.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/app.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2" defer></script>
+  <script src="supabase.js" defer></script>
+  <script src="auth.js" defer></script>
+  <script src="store.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>

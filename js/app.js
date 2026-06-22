@@ -1,8 +1,10 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.8.0
+ * 간석로1545 관리자 시스템 v1.10.0
  *
  * 히스토리
+ * v1.10.0 (2026-06) 로그인 화면 프로그램명 표시, Enter 키 포커스 이동, Vercel 배포
+ * v1.9.0 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * v1.8.0 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * v1.7.0 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
  * v1.6.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
@@ -200,6 +202,7 @@ function renderAll() {
   populatePrepaidFilter()
   renderPrepaids()
   renderNotices()
+  renderInquiries()
   renderUsers()
   renderRecent()
   renderDashboardContracts()
@@ -642,6 +645,44 @@ function renderNotices() {
       </td>
     </tr>
   `).join('')
+}
+
+function renderInquiries() {
+  const tbody = document.getElementById('inquiry-tbody')
+  if (!tbody) return
+  let list = Store.getInquiries()
+  const q = (document.getElementById('inquiry-search')?.value || '').toLowerCase()
+  if (q) list = list.filter(n => (n.title || '').toLowerCase().includes(q) || (n.unitName || '').toLowerCase().includes(q))
+  const units = Store.getUnits()
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6">민원/문의가 없습니다.</td></tr>'
+    return
+  }
+  tbody.innerHTML = list.sort((a, b) => b.createdAt?.localeCompare(a.createdAt)).map(n => `
+    <tr>
+      <td><a href="#" onclick="showInquiryDetail(${n.id});return false" style="color:#1a73e8;text-decoration:none">${esc(n.title)}</a></td>
+      <td>${esc(n.unitName || '')}</td>
+      <td>${esc(n.userName || '')}</td>
+      <td>${n.createdAt || ''}</td>
+      <td><span class="badge ${n.reply ? 'badge-paid' : 'badge-pending'}">${n.reply ? '답변완료' : '대기중'}</span></td>
+      <td>
+        <button class="btn btn-primary" onclick="showInquiryDetail(${n.id})" style="padding:4px 8px;font-size:12px">답변</button>
+        <button class="btn btn-secondary" onclick="deleteInquiry(${n.id})" style="padding:4px 8px;font-size:12px">삭제</button>
+      </td>
+    </tr>
+  `).join('')
+}
+
+function showInquiryDetail(id) {
+  const item = Store.getInquiries().find(n => n.id === id)
+  if (!item) return
+  showModal('inquiry-detail', item)
+}
+
+function deleteInquiry(id) {
+  if (!confirm('삭제하시겠습니까?')) return
+  Store.deleteInquiry(id)
+  renderInquiries()
 }
 
 function renderRecent() {
@@ -1169,6 +1210,43 @@ function showModal(type, editData) {
         <div class="form-group"><label>제목</label><input id="f-ntitle"></div>
         <div class="form-group"><label>내용</label><textarea id="f-ncontent" rows="5"></textarea></div>
       `
+      break
+    }
+    case 'inquiry-detail': {
+      title.textContent = '민원/문의 상세'
+      const n = editData
+      if (!n) { body.innerHTML = '<p>데이터를 찾을 수 없습니다.</p>'; break }
+      body.innerHTML = `
+        <div style="margin-bottom:12px">
+          <p style="font-size:15px;font-weight:600;margin-bottom:4px">${esc(n.title)}</p>
+          <p style="font-size:12px;color:#888">${esc(n.userName || '')} · ${n.unitName || ''} · ${n.createdAt || ''}</p>
+        </div>
+        <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;padding:12px;background:#f9f9f9;border-radius:6px;margin-bottom:16px">${esc(n.content || '')}</div>
+        ${n.reply ? `
+          <div style="border-top:1px solid #e0e0e0;padding-top:12px">
+            <p style="font-size:13px;font-weight:600;color:#1a73e8;margin-bottom:4px">📨 관리자 답변</p>
+            <p style="font-size:12px;color:#888;margin-bottom:8px">${n.repliedAt || ''}</p>
+            <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;padding:12px;background:#e8f0fe;border-radius:6px">${esc(n.reply)}</div>
+          </div>
+        ` : `
+          <div style="border-top:1px solid #e0e0e0;padding-top:12px">
+            <div class="form-group"><label>답변</label><textarea id="f-inquiry-reply" rows="4" style="width:100%"></textarea></div>
+          </div>
+        `}
+      `
+      const saveBtn = document.getElementById('modal-save')
+      if (n.reply) {
+        saveBtn.style.display = 'none'
+      } else {
+        saveBtn.style.display = ''
+        saveBtn.onclick = function saveInquiryReply() {
+          const reply = document.getElementById('f-inquiry-reply')?.value.trim()
+          if (!reply) return alert('답변을 입력하세요.')
+          Store.updateInquiry(n.id, { reply, repliedAt: new Date().toISOString().slice(0, 10) })
+          closeModal()
+          renderInquiries()
+        }
+      }
       break
     }
     case 'user': {

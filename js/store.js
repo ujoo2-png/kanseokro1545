@@ -1,6 +1,6 @@
 /*
  * store.js — localStorage 기반 데이터 저장소
- * 간석로1545 관리자 시스템 v1.8.0
+ * 간석로1545 관리자 시스템 v1.10.0
  * 모든 데이터는 브라우저 localStorage('kanseokro1545_data')에 JSON 직렬화/역직렬화
  */
 
@@ -28,6 +28,7 @@ const Store = {
     if (!this._data.users) this._data.users = []
     if (!this._data.prepaids) this._data.prepaids = []
     if (!this._data.depositDeductions) this._data.depositDeductions = []
+    if (!this._data.inquiries) this._data.inquiries = []
     this._fixDuplicateIds()
     this.save()
     return this._data
@@ -35,7 +36,7 @@ const Store = {
 
   /** 중복 ID를 가진 모든 데이터에 새 ID 부여 + 참조(payments.billId) 업데이트 */
   _fixDuplicateIds() {
-    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions', 'users']
+    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions', 'users', 'inquiries']
     const renamed = []
     for (const key of keys) {
       const arr = this._data[key]
@@ -73,6 +74,7 @@ const Store = {
       prepaids: [],
       depositDeductions: [],
       notices: [],
+      inquiries: [],
     }
     this.save()
   },
@@ -274,6 +276,18 @@ const Store = {
   /** 보증금 차감 내역 삭제 */
   deleteDepositDeduction(id) {
     this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.id !== id)
+    this.save()
+  },
+
+  // Inquiries
+  getInquiries() { return this._data.inquiries || [] },
+  addInquiry(n) { this._data.inquiries.push({ id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...n }); this.save() },
+  updateInquiry(id, data) {
+    const idx = this._data.inquiries.findIndex(x => x.id === id)
+    if (idx > -1) { this._data.inquiries[idx] = { ...this._data.inquiries[idx], ...data }; this.save() }
+  },
+  deleteInquiry(id) {
+    this._data.inquiries = (this._data.inquiries || []).filter(x => x.id !== id)
     this.save()
   },
 
