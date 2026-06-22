@@ -110,6 +110,7 @@
                 <h3>건물 목록</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="building-search" placeholder="건물명 검색..." oninput="renderBuildings()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-secondary" onclick="exportBuildings()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-primary" onclick="showModal('building')">+ 건물 추가</button>
                 </div>
               </div>
@@ -128,6 +129,7 @@
                 <h3>세대 목록</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="unit-search" placeholder="세대명 / 세입자 검색..." oninput="renderUnits()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-secondary" onclick="exportUnits()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-primary" onclick="showModal('unit')">+ 세대 추가</button>
                 </div>
               </div>
@@ -146,6 +148,7 @@
                 <h3>계약 목록</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="contract-search" placeholder="세입자 / 연락처 검색..." oninput="renderContracts()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-secondary" onclick="exportContracts()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-primary" onclick="showModal('contract')">+ 계약 추가</button>
                 </div>
               </div>
@@ -165,6 +168,8 @@
                 <h3>검침 입력</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="meter-search" placeholder="세대명 검색..." oninput="renderMeters()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-secondary" onclick="exportMeters()" style="font-size:12px">엑셀</button>
+                  <button class="btn btn-secondary" onclick="importMeters()" style="font-size:12px">가져오기</button>
                   <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
                   <button class="btn btn-primary" onclick="showModal('meter')">+ 검침 입력</button>
                 </div>
@@ -185,6 +190,7 @@
             <div class="card-header">
                 <h3>청구서 생성</h3>
                 <div style="display:flex;gap:8px">
+                  <button class="btn btn-secondary" onclick="exportBills()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-secondary" onclick="previewBillPrint()" style="font-size:12px">명세서 출력</button>
                   <button class="btn btn-secondary" onclick="clearAllBills()" style="font-size:12px">청구 재생성</button>
                   <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
@@ -219,6 +225,7 @@
             <div class="card-header">
               <h3>수납/미수금 관리</h3>
               <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-secondary" onclick="exportPayments()" style="font-size:12px">엑셀</button>
                 <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
                 <button class="btn btn-secondary" onclick="showModal('deposit-deduction')" style="font-size:12px">보증금 차감</button>
                 <button class="btn btn-primary" onclick="showModal('payment')">+ 입금 등록</button>
@@ -357,9 +364,11 @@
   </div>
 
   <script src="https://unpkg.com/@supabase/supabase-js@2" defer></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <script src="supabase.js" defer></script>
   <script src="auth.js" defer></script>
   <script src="store.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="excel.js" defer></script>
 </body>
 </html>
