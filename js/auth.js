@@ -192,7 +192,7 @@ function switchAuthTab(tab) {
       <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto">
         <div style="text-align:center;margin-bottom:20px">
           <h1 style="margin:0;font-size:22px;font-weight:700;color:#0f4c75">간석로1545</h1>
-          <p style="margin:4px 0 0;font-size:12px;color:#888">관리자 시스템 v1.14.0</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#888">관리자 시스템 v1.15.0</p>
         </div>
         <div style="display:flex;flex-direction:column;gap:10px">
           <input id="af-id" type="text" placeholder="아이디" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter') document.getElementById('af-pw').focus()">

@@ -1,6 +1,6 @@
 /*
  * store.js — localStorage + Supabase 하이브리드 저장소
- * 간석로1545 관리자 시스템 v1.14.0
+ * 간석로1545 관리자 시스템 v1.15.0
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
 
