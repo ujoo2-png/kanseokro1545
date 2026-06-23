@@ -1,7 +1,7 @@
 /*
- * store.js — localStorage 기반 데이터 저장소
- * 간석로1545 관리자 시스템 v1.10.0
- * 모든 데이터는 브라우저 localStorage('kanseokro1545_data')에 JSON 직렬화/역직렬화
+ * store.js — localStorage + Supabase 하이브리드 저장소
+ * 간석로1545 관리자 시스템 v1.14.0
+ * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
 
 const Store = {
@@ -9,29 +9,66 @@ const Store = {
   _key: 'kanseokro1545_data',
   _idCounter: Date.now(),
 
-  /** 고유 ID 생성 (Date.now() 중복 방지) */
   _nextId() {
     this._idCounter++
     return this._idCounter
   },
 
-  /** localStorage에서 JSON 로드, 실패 시 초기화 */
-  init() {
+  _sbTable(name) {
+    const map = { buildings:'buildings', units:'units', contracts:'contracts', meters:'meters', bills:'bills', payments:'payments', users:'users', notices:'notices', prepaids:'prepaids', depositDeductions:'deposit_deductions', inquiries:'inquiries' }
+    return map[name]
+  },
+
+  async _sbSync(table, data) {
+    const sb = getSupabase()
+    if (!sb) return
+    try {
+      if (data.id && data.id > 0) {
+        const { id, ...rest } = data
+        await sb.from(this._sbTable(table)).upsert({ id, ...rest })
+      } else {
+        const { data: inserted } = await sb.from(this._sbTable(table)).insert(data).select()
+        if (inserted && inserted[0]) Object.assign(data, inserted[0])
+      }
+    } catch (e) { console.warn('Supabase sync error:', table, e) }
+  },
+
+  async _sbDelete(table, id) {
+    const sb = getSupabase()
+    if (!sb) return
+    try { await sb.from(this._sbTable(table)).delete().eq('id', id) } catch (e) { console.warn('Supabase delete error:', table, e) }
+  },
+
+  async init() {
     const raw = localStorage.getItem(this._key)
     if (raw) {
       try { this._data = JSON.parse(raw) } catch (e) { this._reset() }
     } else {
       this._reset()
     }
-    if (!this._data.buildings) this._data.buildings = []
-    if (!this._data.contracts) this._data.contracts = []
-    if (!this._data.users) this._data.users = []
-    if (!this._data.prepaids) this._data.prepaids = []
-    if (!this._data.depositDeductions) this._data.depositDeductions = []
-    if (!this._data.inquiries) this._data.inquiries = []
+    this._ensureArrays()
     this._fixDuplicateIds()
     this.save()
+    await this._loadFromSupabase()
     return this._data
+  },
+
+  _ensureArrays() {
+    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices']
+    for (const t of tables) if (!this._data[t]) this._data[t] = []
+  },
+
+  async _loadFromSupabase() {
+    const sb = getSupabase()
+    if (!sb) return
+    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries']
+    for (const table of tables) {
+      try {
+        const { data } = await sb.from(this._sbTable(table)).select('*')
+        if (data) this._data[table] = data
+      } catch (e) { console.warn('Supabase load error:', table, e) }
+    }
+    this.save()
   },
 
   /** 중복 ID를 가진 모든 데이터에 새 ID 부여 + 참조(payments.billId) 업데이트 */
@@ -79,9 +116,22 @@ const Store = {
     this.save()
   },
 
-  /** 현재 _data를 localStorage에 직렬화 저장 */
+  /** localStorage 저장 + Supabase 동기화 */
   save() {
     localStorage.setItem(this._key, JSON.stringify(this._data))
+    this._sbSaveAll()
+  },
+
+  async _sbSaveAll() {
+    const sb = getSupabase()
+    if (!sb) return
+    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries']
+    for (const table of tables) {
+      const items = this._data[table]
+      if (!items || !items.length) continue
+      try { await sb.from(this._sbTable(table)).upsert(items, { onConflict: 'id' }) }
+      catch (e) { console.warn('Supabase save:', table, e.message) }
+    }
   },
 
   // Users (Auth)
@@ -102,6 +152,7 @@ const Store = {
   /** 사용자 삭제 */
   deleteUser(id) {
     this._data.users = (this._data.users || []).filter(x => x.id !== id)
+    this._sbDelete('users', id)
     this.save()
   },
   /** username으로 사용자 찾기 */
@@ -130,6 +181,7 @@ const Store = {
   /** 건물 삭제 (관련 데이터 유지) */
   deleteBuilding(id) {
     this._data.buildings = this._data.buildings.filter(x => x.id !== id)
+    this._sbDelete('buildings', id)
     this.save()
   },
 
@@ -145,6 +197,11 @@ const Store = {
   },
   /** 세대 삭제 + 연결된 검침/청구/수납/계약 모두 제거 */
   deleteUnit(id) {
+    const forDelete = ['meters','bills','payments','prepaids','depositDeductions','contracts'].map(t => {
+      const items = (this._data[t] || []).filter(x => x.unitId === id)
+      items.forEach(item => this._sbDelete(t, item.id))
+      return t
+    })
     this._data.units = this._data.units.filter(u => u.id !== id)
     this._data.meters = this._data.meters.filter(m => m.unitId !== id)
     this._data.bills = this._data.bills.filter(b => b.unitId !== id)
@@ -152,6 +209,7 @@ const Store = {
     this._data.prepaids = (this._data.prepaids || []).filter(p => p.unitId !== id)
     this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.unitId !== id)
     this._data.contracts = this._data.contracts.filter(c => c.unitId !== id)
+    this._sbDelete('units', id)
     this.save()
   },
 
@@ -168,6 +226,7 @@ const Store = {
   /** 계약 삭제 */
   deleteContract(id) {
     this._data.contracts = this._data.contracts.filter(x => x.id !== id)
+    this._sbDelete('contracts', id)
     this.save()
   },
 
@@ -180,6 +239,12 @@ const Store = {
   updateMeter(id, data) {
     const idx = this._data.meters.findIndex(m => m.id === id)
     if (idx > -1) { this._data.meters[idx] = { ...this._data.meters[idx], ...data }; this.save() }
+  },
+  /** 검침 삭제 */
+  deleteMeter(id) {
+    this._data.meters = this._data.meters.filter(m => m.id !== id)
+    this._sbDelete('meters', id)
+    this.save()
   },
 
   // Bills
@@ -201,6 +266,7 @@ const Store = {
   /** 수납 삭제 */
   deletePayment(id) {
     this._data.payments = this._data.payments.filter(p => p.id !== id)
+    this._sbDelete('payments', id)
     this.save()
   },
   /**
@@ -262,6 +328,7 @@ const Store = {
   /** 선수금 삭제 */
   deletePrepaid(id) {
     this._data.prepaids = (this._data.prepaids || []).filter(p => p.id !== id)
+    this._sbDelete('prepaids', id)
     this.save()
   },
 
@@ -276,6 +343,7 @@ const Store = {
   /** 보증금 차감 내역 삭제 */
   deleteDepositDeduction(id) {
     this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.id !== id)
+    this._sbDelete('depositDeductions', id)
     this.save()
   },
 
@@ -288,6 +356,7 @@ const Store = {
   },
   deleteInquiry(id) {
     this._data.inquiries = (this._data.inquiries || []).filter(x => x.id !== id)
+    this._sbDelete('inquiries', id)
     this.save()
   },
 

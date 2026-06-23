@@ -1,8 +1,10 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.10.0
+ * 간석로1545 관리자 시스템 v1.14.0
  *
  * 히스토리
+ * v1.14.0 (2026-06) Supabase Auth 전환, RLS 정책 개선, 설정-QR코드, 보안 패치
+ * v1.12.0 (2026-06) 로그인 전체화면 전환, 배경클릭/F5 차단, 색상 테마 변경 (그린/아이보리)
  * v1.10.0 (2026-06) 엑셀 업로드/다운로드, 로그인 화면 개선(프로그램명, Enter 이동), Vercel 배포
  * v1.9.0 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * v1.8.0 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
@@ -129,25 +131,28 @@ function restorePageState() {
 }
 
 /** 앱 초기화 — Store 로드 → 네비게이션/모달/사이드바 설정 → 전체 렌더 + 통계 갱신 */
-function init() {
-  Store.init()
+async function init() {
+  await Store.init()
   if (typeof ensureAdmin === 'function') ensureAdmin()
   setupNavigation()
   setupDraggableModal()
   setupSidebar()
-  checkAuth()
+  await checkAuth()
   applyAuthUI()
   onAuthChange(applyAuthUI)
-  if (!currentUser) showAuthModal('login')
+  if (!currentUser) {
+    showAuthModal('login')
+    return
+  }
   restorePageState()
   renderAll()
   updateStats()
 }
 
-function doLogoutUI() {
-  logout()
+async function doLogoutUI() {
+  await logout()
   applyAuthUI()
-  location.reload()
+  showAuthModal('login')
 }
 
 /* Sidebar toggle — localStorage에 접힘 상태 저장/복원 */
@@ -219,7 +224,7 @@ function renderBuildings() {
   }
   tbody.innerHTML = list.map(b => `
     <tr>
-      <td><a href="#" onclick="editBuilding(${b.id});return false" style="color:#1a73e8;text-decoration:none">${b.name}</a></td>
+      <td><a href="#" onclick="editBuilding(${b.id});return false" style="color:#2d5427;text-decoration:none">${b.name}</a></td>
       <td>${b.address || '-'}</td>
       <td>${b.adminName || '-'}</td>
       <td>${b.adminPhone || '-'}</td>
@@ -250,7 +255,7 @@ function renderUnits() {
     const hasActive = !!Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
     const vacantClass = hasActive ? '' : 'row-vacant'
     return `<tr class="${vacantClass}">
-      <td><a href="#" onclick="editUnit(${u.id});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${u.name}</a></td>
+      <td><a href="#" onclick="editUnit(${u.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${u.name}</a></td>
       <td>${bld ? bld.name : '-'}</td>
       <td>${u.area ? u.area + '평' : '-'}</td>
       <td>${yn(u.hasAC)}</td>
@@ -292,7 +297,7 @@ function renderContracts() {
     const activeClass = c.status === 'active' ? 'row-active' : ''
     const hasFile = c.fileName && c.fileData
     return `<tr class="${activeClass}">
-      <td>${unit ? `<a href="#" onclick="editContract(${c.id});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit.name}</a>` : '알 수 없음'}</td>
+      <td>${unit ? `<a href="#" onclick="editContract(${c.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit.name}</a>` : '알 수 없음'}</td>
       <td>${c.tenant || '-'}</td>
       <td>${c.phone || '-'}</td>
       <td>${c.emergency || '-'}</td>
@@ -306,7 +311,7 @@ function renderContracts() {
       <td>${c.accountNumber || '-'}</td>
       <td>${c.accountHolder || '-'}</td>
       <td>${welfareLabel(c.welfare)}</td>
-      <td>${hasFile ? `<a href="#" onclick="previewContractFile(${c.id});return false" style="color:#1a73e8;text-decoration:none;font-size:12px" title="${esc(c.fileName)}">📎 ${esc(c.fileName)}</a>` : '-'}</td>
+      <td>${hasFile ? `<a href="#" onclick="previewContractFile(${c.id});return false" style="color:#2d5427;text-decoration:none;font-size:12px" title="${esc(c.fileName)}">📎 ${esc(c.fileName)}</a>` : '-'}</td>
       <td><span class="badge ${badge}">${label}</span></td>
       <td>
         <button class="btn btn-secondary" onclick="editContract(${c.id})" style="padding:4px 8px;font-size:12px">수정</button>
@@ -333,7 +338,7 @@ function renderMeters() {
   tbody.innerHTML = meters.map(m => {
     const unit = Store.getUnits().find(u => u.id === m.unitId)
     return `<tr>
-      <td><a href="#" onclick="editMeter(${m.id});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
+      <td><a href="#" onclick="editMeter(${m.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${m.date}</td>
       <td>${m.electricity || 0}</td>
       <td>${m.water || 0}</td>
@@ -407,7 +412,7 @@ function renderBills() {
     const vacantClass = hasActive ? '' : 'row-vacant'
     const prepaidAmt = allBills.length ? Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0) : 0
     return `<tr class="${vacantClass}">
-      <td><a href="#" onclick="showBillDetail(${b.id});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
+      <td><a href="#" onclick="showBillDetail(${b.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${b.yearMonth}</td>
       <td>${fmt(b.rent)}</td>
       <td>${fmt(b.maintenanceFee)}</td>
@@ -449,7 +454,7 @@ function renderPayments() {
     const ob = overdue && overdue.overdueDays > 0 ? overdueBadge(overdue.overdueDays) : null
     const srcLabel = p.source === 'prepaid' ? ' (선수금)' : p.source === 'deposit' ? ' (보증금)' : ''
     return `<tr>
-      <td><a href="#" onclick="showBillDetail(${bill ? bill.id : 0});return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
+      <td><a href="#" onclick="showBillDetail(${bill ? bill.id : 0});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${bill ? bill.yearMonth : '-'}</td>
       <td>${fmt(bill ? bill.total : 0)}</td>
       <td>${fmt(p.amount)}${srcLabel}</td>
@@ -470,6 +475,79 @@ function switchPaymentTab(tabId) {
   if (tabId === 'arrears') renderArrears()
   if (tabId === 'prepaids') renderPrepaids()
   if (tabId === 'deposits') renderDeposits()
+}
+
+/* Settings page tabs */
+function switchSettingsTab(tabId) {
+  document.querySelectorAll('#page-settings .tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('#page-settings .tab-content').forEach(c => c.classList.remove('active'))
+  document.querySelector(`#page-settings .tab[data-stab="${tabId}"]`).classList.add('active')
+  document.getElementById(tabId).classList.add('active')
+  if (tabId === 'tab-users') renderUsers()
+  if (tabId === 'tab-mobile') {
+    const saved = localStorage.getItem('kanseokro1545_mobile_url')
+    const input = document.getElementById('mobile-url')
+    if (input) {
+      input.value = saved || window.location.origin + '/mobile/'
+      if (!saved) localStorage.setItem('kanseokro1545_mobile_url', input.value)
+      updateQR()
+    }
+  }
+}
+
+/* QR code — 모바일 접속 URL을 QR코드 이미지로 표시 */
+function updateQR() {
+  const input = document.getElementById('mobile-url')
+  if (!input) return
+  const url = input.value.trim()
+  if (!url) {
+    document.getElementById('qr-image').style.display = 'none'
+    return
+  }
+  // URL 저장
+  localStorage.setItem('kanseokro1545_mobile_url', url)
+  const img = document.getElementById('qr-image')
+  img.style.display = 'block'
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&data=' + encodeURIComponent(url)
+  img.onerror = function() {
+    img.style.display = 'none'
+    document.getElementById('qr-container').innerHTML += '<p style="color:#d32f2f;font-size:12px">QR코드를 불러올 수 없습니다</p>'
+  }
+}
+
+/* QR 코드를 JPG/PNG로 다운로드 */
+function downloadQR(format) {
+  const img = document.getElementById('qr-image')
+  if (!img.src) return alert('QR코드를 먼저 생성해주세요.')
+  const canvas = document.createElement('canvas')
+  canvas.width = 480
+  canvas.height = 480
+  const ctx = canvas.getContext('2d')
+  // 흰 배경
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const tempImg = new Image()
+  tempImg.crossOrigin = 'anonymous'
+  tempImg.onload = function() {
+    ctx.drawImage(tempImg, 0, 0, 480, 480)
+    // 하단에 URL 텍스트 추가
+    ctx.fillStyle = '#333'
+    ctx.font = '14px sans-serif'
+    ctx.textAlign = 'center'
+    const url = document.getElementById('mobile-url')?.value || ''
+    ctx.fillText(url, 240, 470)
+    canvas.toBlob(function(blob) {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'kanseokro1545-mobile.' + format
+      a.click()
+      URL.revokeObjectURL(a.href)
+    }, 'image/' + format, 0.95)
+  }
+  tempImg.onerror = function() {
+    alert('QR코드 이미지를 불러올 수 없습니다. 인터넷 연결을 확인하세요.')
+  }
+  tempImg.src = img.src
 }
 
 function renderArrears() {
@@ -504,7 +582,7 @@ function renderArrears() {
   tbody.innerHTML = rows.map(r => {
     const badgeCls = r.maxOverdue >= 60 ? 'badge-unpaid' : r.maxOverdue >= 30 ? 'badge-pending' : ''
     return `<tr>
-      <td><a href="#" onclick="switchPaymentTab('payments');document.getElementById('payment-search').value='${esc(r.name)}';renderPayments();return false" style="color:#1a73e8;text-decoration:none;font-weight:600">${esc(r.name)}</a></td>
+      <td><a href="#" onclick="switchPaymentTab('payments');document.getElementById('payment-search').value='${esc(r.name)}';renderPayments();return false" style="color:#2d5427;text-decoration:none;font-weight:600">${esc(r.name)}</a></td>
       <td>${r.count}건</td>
       <td>${fmt(r.totalBilled)}</td>
       <td>${fmt(r.totalPaid)}</td>
@@ -636,7 +714,7 @@ function renderNotices() {
   }
   tbody.innerHTML = notices.map(n => `
     <tr>
-      <td><a href="#" onclick="showNoticeDetail(${n.id});return false" style="color:#1a73e8;text-decoration:none">${n.title}</a></td>
+      <td><a href="#" onclick="showNoticeDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${n.title}</a></td>
       <td>${n.date}</td>
       <td><span class="badge ${n.sent ? 'badge-paid' : 'badge-pending'}">${n.sent ? '발송완료' : '미발송'}</span></td>
       <td>
@@ -660,7 +738,7 @@ function renderInquiries() {
   }
   tbody.innerHTML = list.sort((a, b) => b.createdAt?.localeCompare(a.createdAt)).map(n => `
     <tr>
-      <td><a href="#" onclick="showInquiryDetail(${n.id});return false" style="color:#1a73e8;text-decoration:none">${esc(n.title)}</a></td>
+      <td><a href="#" onclick="showInquiryDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${esc(n.title)}</a></td>
       <td>${esc(n.unitName || '')}</td>
       <td>${esc(n.userName || '')}</td>
       <td>${n.createdAt || ''}</td>
@@ -1224,7 +1302,7 @@ function showModal(type, editData) {
         <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;padding:12px;background:#f9f9f9;border-radius:6px;margin-bottom:16px">${esc(n.content || '')}</div>
         ${n.reply ? `
           <div style="border-top:1px solid #e0e0e0;padding-top:12px">
-            <p style="font-size:13px;font-weight:600;color:#1a73e8;margin-bottom:4px">📨 관리자 답변</p>
+            <p style="font-size:13px;font-weight:600;color:#2d5427;margin-bottom:4px">📨 관리자 답변</p>
             <p style="font-size:12px;color:#888;margin-bottom:8px">${n.repliedAt || ''}</p>
             <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;padding:12px;background:#e8f0fe;border-radius:6px">${esc(n.reply)}</div>
           </div>
@@ -1569,8 +1647,7 @@ function removeContractFile(id) {
 
 /** 검침 삭제 (직접 Store._data 조작) */
 function deleteMeter(id) {
-  Store._data.meters = Store.getMeters().filter(m => m.id !== id)
-  Store.save()
+  Store.deleteMeter(id)
   renderAll()
 }
 

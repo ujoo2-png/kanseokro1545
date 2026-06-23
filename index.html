@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
+  <div id="app" style="display:none">
     <aside id="sidebar">
       <div class="sidebar-header" onclick="goHome()" style="cursor:pointer">
         <h1>간석로1545</h1>
-        <p class="subtitle">관리자 시스템 v1.10.0</p>
+        <p class="subtitle">관리자 시스템 v1.14.0</p>
       </div>
       <nav id="nav">
         <ul>
@@ -22,7 +22,7 @@
           <li><a href="#" data-page="payment">💰 수납/미수금</a></li>
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
           <li><a href="#" data-page="inquiry">📞 민원/문의</a></li>
-          <li><a href="#" data-page="settings" style="display:none">⚙️ 설정</a></li>
+          <li><a href="#" data-page="settings">⚙️ 설정</a></li>
         </ul>
       </nav>
       <button class="sidebar-close" onclick="toggleSidebar()" title="사이드바 닫기">&larr;</button>
@@ -35,8 +35,8 @@
         </div>
         <div class="topbar-right">
           <span id="user-info">로그인 필요</span>
-          <button id="login-btn-top" onclick="showAuthModal('login')" style="display:none;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">로그인</button>
-          <button id="logout-btn-top" onclick="doLogoutUI()" style="display:none;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">로그아웃</button>
+          <button id="login-btn-top" onclick="showAuthModal('login')" style="display:none">로그인</button>
+          <button id="logout-btn-top" onclick="doLogoutUI()" style="display:none">로그아웃</button>
         </div>
       </header>
       <section id="content">
@@ -329,20 +329,61 @@
         </div>
 
         <div id="page-settings" class="page">
-          <div class="card">
-            <div class="card-header">
-              <h3>사용자 관리</h3>
-              <div style="display:flex;gap:8px;align-items:center">
-                <input type="text" id="user-search" placeholder="이름 / 아이디 검색..." oninput="renderUsers()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
-                <button class="btn btn-primary" onclick="showModal('user')">+ 사용자 추가</button>
+          <div class="tabs">
+            <button class="tab active" data-stab="tab-users" onclick="switchSettingsTab('tab-users')">👥 사용자 관리</button>
+            <button class="tab" data-stab="tab-mobile" onclick="switchSettingsTab('tab-mobile')">📱 모바일 접속</button>
+          </div>
+
+          <div id="tab-users" class="tab-content active">
+            <div class="card">
+              <div class="card-header">
+                <h3>사용자 목록</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="user-search" placeholder="이름 / 아이디 검색..." oninput="renderUsers()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('user')">+ 사용자 추가</button>
+                </div>
+              </div>
+              <div class="table-wrap"><table class="table-dense">
+                <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>연락처</th><th>권한</th><th>세대</th><th>상태</th><th>가입일</th><th>관리</th></tr></thead>
+                <tbody id="user-tbody">
+                  <tr><td colspan="9">등록된 사용자가 없습니다.</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+
+          <div id="tab-mobile" class="tab-content">
+            <div class="card">
+              <div class="card-header">
+                <h3>📱 모바일 앱 접속</h3>
+              </div>
+              <div style="padding:20px;display:flex;gap:32px;flex-wrap:wrap">
+                <div style="flex:1;min-width:260px">
+                  <h4 style="margin:0 0 12px;font-size:15px">세입자 전용 앱</h4>
+                  <p style="font-size:13px;color:#555;line-height:1.7">
+                    아래 주소를 스마트폰 브라우저에 입력하거나<br>
+                    QR코드를 스캔하면 세입자 전용 페이지에 접속할 수 있습니다.<br><br>
+                    <strong>주소</strong><br>
+                    <input id="mobile-url" type="url" placeholder="https://..." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-top:4px" oninput="updateQR()">
+                  </p>
+                  <div style="font-size:12px;color:#888;margin-top:8px">
+                    🔹 청구서/납부내역 조회<br>
+                    🔹 공지사항 확인<br>
+                    🔹 민원/문의 접수
+                  </div>
+                </div>
+                <div style="text-align:center">
+                  <div id="qr-container" style="background:#fff;border:2px dashed #ddd;border-radius:12px;padding:16px;display:inline-block">
+                    <img id="qr-image" src="" alt="QR코드" style="width:240px;height:240px;display:block">
+                    <p style="font-size:11px;color:#999;margin:8px 0 0">QR코드를 스캔하면 모바일 페이지로 이동합니다</p>
+                  </div>
+                  <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
+                    <button class="btn btn-primary" onclick="downloadQR('jpg')">📥 JPG 저장</button>
+                    <button class="btn btn-secondary" onclick="downloadQR('png')">📥 PNG 저장</button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="table-wrap"><table class="table-dense">
-              <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>연락처</th><th>권한</th><th>세대</th><th>상태</th><th>가입일</th><th>관리</th></tr></thead>
-              <tbody id="user-tbody">
-                <tr><td colspan="9">등록된 사용자가 없습니다.</td></tr>
-              </tbody>
-            </table></div>
           </div>
         </div>
       </section>
