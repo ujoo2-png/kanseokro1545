@@ -19,16 +19,45 @@ const Store = {
     return map[name]
   },
 
+  _toSnake(obj) {
+    const convert = k => k.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2').toLowerCase()
+    if (Array.isArray(obj)) return obj.map(v => typeof v === 'object' && v ? this._toSnake(v) : v)
+    if (obj && typeof obj === 'object') {
+      const out = {}
+      for (const k of Object.keys(obj)) {
+        if (k === 'id') { out.id = obj[k]; continue }
+        out[convert(k)] = obj[k]
+      }
+      return out
+    }
+    return obj
+  },
+
+  _toCamel(obj) {
+    const convert = k => k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+    if (Array.isArray(obj)) return obj.map(v => typeof v === 'object' && v ? this._toCamel(v) : v)
+    if (obj && typeof obj === 'object') {
+      const out = {}
+      for (const k of Object.keys(obj)) {
+        if (k === 'id') { out.id = obj[k]; continue }
+        out[convert(k)] = obj[k]
+      }
+      return out
+    }
+    return obj
+  },
+
   async _sbSync(table, data) {
     const sb = getSupabase()
     if (!sb) return
     try {
-      if (data.id && data.id > 0) {
-        const { id, ...rest } = data
+      const snake = this._toSnake(data)
+      if (snake.id && snake.id > 0) {
+        const { id, ...rest } = snake
         await sb.from(this._sbTable(table)).upsert({ id, ...rest })
       } else {
-        const { data: inserted } = await sb.from(this._sbTable(table)).insert(data).select()
-        if (inserted && inserted[0]) Object.assign(data, inserted[0])
+        const { data: inserted } = await sb.from(this._sbTable(table)).insert(snake).select()
+        if (inserted && inserted[0]) Object.assign(data, this._toCamel(inserted[0]))
       }
     } catch (e) { console.warn('Supabase sync error:', table, e) }
   },
@@ -65,7 +94,7 @@ const Store = {
     for (const table of tables) {
       try {
         const { data } = await sb.from(this._sbTable(table)).select('*')
-        if (data) this._data[table] = data
+        if (data) this._data[table] = this._toCamel(data)
       } catch (e) { console.warn('Supabase load error:', table, e) }
     }
     this.save()
@@ -129,7 +158,7 @@ const Store = {
     for (const table of tables) {
       const items = this._data[table]
       if (!items || !items.length) continue
-      try { await sb.from(this._sbTable(table)).upsert(items, { onConflict: 'id' }) }
+      try { await sb.from(this._sbTable(table)).upsert(this._toSnake(items), { onConflict: 'id' }) }
       catch (e) { console.warn('Supabase save:', table, e.message) }
     }
   },
