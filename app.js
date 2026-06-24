@@ -1,26 +1,26 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.15.0
+ * 간석로1545 관리자 시스템 v1.15.7
  *
  * 히스토리
- * v1.15.0 (2026-06) 모바일 배포 경로 수정, 절대경로→상대경로
- * v1.12.0 (2026-06) 로그인 전체화면 전환, 배경클릭/F5 차단, 색상 테마 변경 (그린/아이보리)
- * v1.10.0 (2026-06) 엑셀 업로드/다운로드, 로그인 화면 개선(프로그램명, Enter 이동), Vercel 배포
- * v1.9.0 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
- * v1.8.0 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
- * v1.7.0 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
- * v1.6.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
- * v1.6.4 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
- * v1.6.3 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
- * v1.6.2 (2026-06) 입금등록: 청구건 기준 세대 자동 매칭 (불일치 원천 차단)
- * v1.6.1 (2026-06) 수납-청구건 불일치 정합성 검사 및 자동 수정 기능
- * v1.6.0 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드
- * v1.5.0 (2026-06) 검색필터 전메뉴 적용, 엔티티명 클릭 상세보기, A6 명세서 출력, 정합성검토+검침누락, 세대명굵게, 검침량감소체크
- * v1.4.0 (2026-06) 청구 재생성 버그 수정, 사용량/복지필드 저장, TV수신료, 검침 날짜정렬
- * v1.3.0 (2026-06) 복지할인, 한국 전기/수도 누진제 요금 계산 엔진
- * v1.2.0 (2026-06) 사이드바 슬라이딩 토글, 대시보드 계약현황, 천단위 콤마
- * v1.1.0 (2026-06) 계약관리 고도화(비상연락처, 부동산명, 계좌), 세대관리 평수/가전
- * v1.0.0 (2026-06) 초기 릴리스 — 건물/세대/계약/검침/청구/수납/공지 CRUD
+ * vv1.15.5 (2026-06) 모바일 URL 기본값 Vercel로 변경
+ * vv1.15.5 (2026-06) 로그인 전체화면 전환, 배경클릭/F5 차단, 색상 테마 변경 (그린/아이보리)
+ * vv1.15.5 (2026-06) 엑셀 업로드/다운로드, 로그인 화면 개선(프로그램명, Enter 이동), Vercel 배포
+ * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
+ * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
+ * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
+ * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
+ * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
+ * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
+ * vv1.15.5 (2026-06) 입금등록: 청구건 기준 세대 자동 매칭 (불일치 원천 차단)
+ * vv1.15.5 (2026-06) 수납-청구건 불일치 정합성 검사 및 자동 수정 기능
+ * vv1.15.5 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드
+ * vv1.15.5 (2026-06) 검색필터 전메뉴 적용, 엔티티명 클릭 상세보기, A6 명세서 출력, 정합성검토+검침누락, 세대명굵게, 검침량감소체크
+ * vv1.15.5 (2026-06) 청구 재생성 버그 수정, 사용량/복지필드 저장, TV수신료, 검침 날짜정렬
+ * vv1.15.5 (2026-06) 복지할인, 한국 전기/수도 누진제 요금 계산 엔진
+ * vv1.15.5 (2026-06) 사이드바 슬라이딩 토글, 대시보드 계약현황, 천단위 콤마
+ * vv1.15.5 (2026-06) 계약관리 고도화(비상연락처, 부동산명, 계좌), 세대관리 평수/가전
+ * vv1.15.5 (2026-06) 초기 릴리스 — 건물/세대/계약/검침/청구/수납/공지 CRUD
  */
 
 let state = { currentModal: null, editingId: null }
@@ -237,6 +237,47 @@ function renderBuildings() {
   `).join('')
 }
 
+/* Contract status filter */
+let contractStatusFilter = ''
+function setContractFilter(status) {
+  contractStatusFilter = status
+  document.querySelectorAll('.contract-filter-btn').forEach(b => {
+    b.style.background = b.dataset.filter === status ? '#2d5427' : '#e8eaed'
+    b.style.color = b.dataset.filter === status ? '#fff' : '#555'
+    b.style.fontWeight = b.dataset.filter === status ? '600' : '400'
+  })
+  renderContracts()
+}
+/* Show contract history for a unit */
+function showContractHistory(unitId) {
+  const unit = Store.getUnits().find(u => u.id === unitId)
+  const contracts = Store.getContracts().filter(c => c.unitId === unitId)
+    .sort((a, b) => ((b.contractStart || '') > (a.contractStart || '') ? 1 : -1))
+  const overlay = document.getElementById('modal-overlay')
+  overlay.classList.remove('hidden')
+  document.getElementById('modal-title').textContent = (unit ? unit.name : '알 수 없음') + ' — 계약 이력'
+  document.getElementById('modal-body').innerHTML = !contracts.length
+    ? '<p style="padding:20px;text-align:center;color:#888">등록된 계약이 없습니다.</p>'
+    : '<div style="max-height:400px;overflow-y:auto">' + contracts.map(c => {
+      const badge = c.status === 'active' ? 'badge-paid' : 'badge-unpaid'
+      const l = c.status === 'active' ? '진행중' : '종료'
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eee">
+        <div>
+          <strong>${esc(c.tenant || '-')}</strong>
+          <span style="font-size:12px;color:#888;margin-left:8px">${c.contractStart || '-'} ~ ${c.contractEnd || '-'}</span>
+          <span style="font-size:12px;color:#888;margin-left:8px">월세 ${fmt(c.rent)}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="badge ${badge}">${l}</span>
+          <button class="btn btn-secondary" onclick="closeModal();editContract(${c.id})" style="padding:3px 7px;font-size:11px">수정</button>
+        </div>
+      </div>`
+    }).join('') + '</div>'
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">닫기</button>
+    <button class="btn btn-primary" onclick="closeModal();showModal('contract',{unitId:${unitId}})" style="font-size:12px">+ 새 계약 등록</button>`
+}
+
 function renderUnits() {
   const tbody = document.getElementById('unit-tbody')
   let units = Store.getUnits()
@@ -266,6 +307,9 @@ function renderUnits() {
       <td>${yn(u.hasBed)}</td>
       <td>${yn(u.hasCloset)}</td>
       <td>
+        <button class="btn btn-secondary" onclick="showContractHistory(${u.id})" style="padding:4px 8px;font-size:12px">계약</button>
+      </td>
+      <td>
         <button class="btn btn-secondary" onclick="editUnit(${u.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteUnit(${u.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
@@ -286,8 +330,11 @@ function renderContracts() {
         (unit && unit.name.toLowerCase().includes(q))
     })
   }
+  if (contractStatusFilter) {
+    contracts = contracts.filter(c => c.status === contractStatusFilter)
+  }
   if (!contracts.length) {
-    tbody.innerHTML = '<tr><td colspan="17">등록된 계약이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="18">등록된 계약이 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = contracts.map(c => {
@@ -314,6 +361,7 @@ function renderContracts() {
       <td>${hasFile ? `<a href="#" onclick="previewContractFile(${c.id});return false" style="color:#2d5427;text-decoration:none;font-size:12px" title="${esc(c.fileName)}">📎 ${esc(c.fileName)}</a>` : '-'}</td>
       <td><span class="badge ${badge}">${label}</span></td>
       <td>
+        <button class="btn btn-secondary" onclick="showContractHistory(${c.unitId})" style="padding:4px 8px;font-size:12px">이력</button>
         <button class="btn btn-secondary" onclick="editContract(${c.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteContract(${c.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
@@ -488,7 +536,7 @@ function switchSettingsTab(tabId) {
     const saved = localStorage.getItem('kanseokro1545_mobile_url')
     const input = document.getElementById('mobile-url')
     if (input) {
-      input.value = saved || window.location.origin + '/mobile/'
+      input.value = saved || 'https://kanseokro1545.vercel.app/mobile/'
       if (!saved) localStorage.setItem('kanseokro1545_mobile_url', input.value)
       updateQR()
     }
@@ -984,6 +1032,7 @@ function setupDraggableModal() {
 function showModal(type, editData) {
   state.currentModal = type
   state.editingId = editData ? editData.id : null
+  document.getElementById('modal-footer').innerHTML = '<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" id="modal-save" onclick="saveModal()">저장</button>'
   const overlay = document.getElementById('modal-overlay')
   const modal = document.getElementById('modal')
   overlay.classList.remove('hidden')
@@ -1433,6 +1482,14 @@ function saveModal() {
         contractStart: document.getElementById('f-cstart').value,
         contractEnd: document.getElementById('f-cend').value,
         status: document.getElementById('f-cstatus').value,
+      }
+      // 중복 진행중 계약 체크
+      if (data.status === 'active') {
+        const dup = Store.getContracts().find(c => c.id !== state.editingId && c.unitId === data.unitId && c.status === 'active')
+        if (dup) {
+          const u = Store.getUnits().find(u => u.id === data.unitId)
+          return alert(`"${u ? u.name : '해당 세대'}"에 이미 진행중인 계약이 있습니다.\n기존 계약을 종료 후 새 계약을 등록해주세요.`)
+        }
       }
       if (fileInput && fileInput.files && fileInput.files[0]) {
         const file = fileInput.files[0]
