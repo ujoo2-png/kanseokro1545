@@ -20,6 +20,8 @@
           <li><a href="#" data-page="meter">📊 검침 입력</a></li>
           <li><a href="#" data-page="billing">📄 청구서 생성</a></li>
           <li><a href="#" data-page="payment">💰 수납/미수금</a></li>
+          <li><a href="#" data-page="report">📊 리포트</a></li>
+          <li><a href="#" data-page="maintenance">🔧 유지보수</a></li>
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
           <li><a href="#" data-page="inquiry">📞 민원/문의</a></li>
           <li><a href="#" data-page="settings">⚙️ 설정</a></li>
@@ -70,6 +72,10 @@
               <span class="stat-label">선수금 잔액</span>
               <span class="stat-value" id="stat-prepaid">0원</span>
             </div>
+            <div class="stat-card">
+              <span class="stat-label">수납율</span>
+              <span class="stat-value" id="stat-collection-rate">0%</span>
+            </div>
           </div>
           <div class="card">
             <h3>계약 현황 <span id="dashboard-date" style="font-weight:400;font-size:13px;color:#888;margin-left:8px"></span></h3>
@@ -94,6 +100,88 @@
                 <tr><td colspan="3">데이터가 없습니다.</td></tr>
               </tbody>
             </table>
+          </div>
+          <div class="stats-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card">
+              <h3>📈 수납율 <span id="dash-collection-rate" style="font-weight:400;font-size:13px;color:#888">0%</span></h3>
+              <canvas id="dash-collection-chart" width="400" height="160" style="width:100%;height:160px"></canvas>
+            </div>
+            <div class="card">
+              <h3>⚠️ 미수 TOP 5</h3>
+              <div id="dash-top5" style="padding:12px 16px;font-size:13px;color:#888">데이터가 없습니다.</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>🔧 진행중인 유지보수 <span id="dash-mnt-count" style="font-weight:400;font-size:13px;color:#888">0건</span></h3>
+            <div id="dash-maintenance" style="padding:12px 16px;font-size:13px;color:#888">데이터가 없습니다.</div>
+          </div>
+        </div>
+
+        <div id="page-report" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>📊 리포트</h3>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px">
+              <div class="card">
+                <h3>월별 미수 현황</h3>
+                <p id="report-arrears-summary" style="font-size:12px;color:#888;padding:0 16px 8px"></p>
+                <canvas id="chart-arrears" width="500" height="240" style="width:100%;height:240px"></canvas>
+              </div>
+              <div class="card">
+                <h3>연체 추이</h3>
+                <canvas id="chart-overdue-trend" width="500" height="240" style="width:100%;height:240px"></canvas>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 16px 16px">
+              <div class="card">
+                <div class="card-header">
+                  <h3>세대별 사용량</h3>
+                  <select id="report-unit-select" onchange="renderUnitUsage()" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none">
+                    <option value="">전체 세대</option>
+                  </select>
+                </div>
+                <canvas id="chart-unit-usage" width="500" height="240" style="width:100%;height:240px"></canvas>
+              </div>
+              <div class="card">
+                <h3>월별 청구/수납 추이</h3>
+                <canvas id="chart-income-expense" width="500" height="240" style="width:100%;height:240px"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="page-maintenance" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3>🔧 유지보수 관리</h3>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="text" id="mnt-search" placeholder="제목/세대 검색..." oninput="renderMaintenance()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                <button class="btn btn-primary" onclick="showModal('maintenance')">+ 유지보수 등록</button>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;padding:10px 20px;border-bottom:1px solid #eee;font-size:13px;flex-wrap:wrap" id="mnt-summary">
+              <span>전체: <strong id="mnt-total">0</strong>건</span>
+              <span style="color:#e65100">접수: <strong id="mnt-pending">0</strong>건</span>
+              <span style="color:#1565c0">진행중: <strong id="mnt-progress">0</strong>건</span>
+              <span style="color:#2d5427">완료: <strong id="mnt-done">0</strong>건</span>
+              <span>총 비용: <strong id="mnt-cost" style="color:#c62828">0원</strong></span>
+            </div>
+            <div style="display:flex;gap:4px;padding:8px 20px;flex-wrap:wrap" id="mnt-filter-bar">
+              <span class="mnt-filter-btn active-btn" data-mnt="" onclick="setMntFilter('')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#2d5427;color:#fff">전체</span>
+              <span class="mnt-filter-btn" data-mnt="pending" onclick="setMntFilter('pending')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">접수</span>
+              <span class="mnt-filter-btn" data-mnt="in_progress" onclick="setMntFilter('in_progress')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">진행중</span>
+              <span class="mnt-filter-btn" data-mnt="completed" onclick="setMntFilter('completed')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">완료</span>
+              <span class="mnt-filter-btn" data-mnt="cancelled" onclick="setMntFilter('cancelled')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">취소</span>
+            </div>
+            <div class="table-wrap"><table class="table-dense">
+              <thead>
+                <tr><th>No.</th><th>세대</th><th>항목</th><th>제목</th><th>상태</th><th>우선순위</th><th>비용</th><th>업체</th><th>예정일</th><th>완료일</th><th>관리</th></tr>
+              </thead>
+              <tbody id="mnt-tbody">
+                <tr><td colspan="11">유지보수 내역이 없습니다.</td></tr>
+              </tbody>
+            </table></div>
           </div>
         </div>
 
@@ -415,6 +503,7 @@
   <script src="auth.js" defer></script>
   <script src="store.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="report.js" defer></script>
   <script src="excel.js" defer></script>
 </body>
 </html>

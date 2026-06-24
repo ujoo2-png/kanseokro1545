@@ -16,7 +16,7 @@ const Store = {
   },
 
   _sbTable(name) {
-    const map = { buildings:'buildings', units:'units', contracts:'contracts', meters:'meters', bills:'bills', payments:'payments', users:'users', notices:'notices', prepaids:'prepaids', depositDeductions:'deposit_deductions', inquiries:'inquiries' }
+    const map = { buildings:'buildings', units:'units', contracts:'contracts', meters:'meters', bills:'bills', payments:'payments', users:'users', notices:'notices', prepaids:'prepaids', depositDeductions:'deposit_deductions', inquiries:'inquiries', maintenanceCategories:'maintenance_categories', maintenanceRecords:'maintenance_records', notifications:'notifications' }
     return map[name]
   },
 
@@ -84,14 +84,14 @@ const Store = {
   },
 
   _ensureArrays() {
-    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices']
+    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices','maintenanceCategories','maintenanceRecords','notifications']
     for (const t of tables) if (!this._data[t]) this._data[t] = []
   },
 
   async _loadFromSupabase() {
     const sb = getSupabase()
     if (!sb) return
-    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries']
+    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications']
     for (const table of tables) {
       try {
         const { data } = await sb.from(this._sbTable(table)).select('*')
@@ -113,7 +113,7 @@ const Store = {
 
   /** 중복 ID를 가진 모든 데이터에 새 ID 부여 + 참조(payments.billId) 업데이트 */
   _fixDuplicateIds() {
-    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions', 'users', 'inquiries']
+    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions', 'users', 'inquiries', 'maintenanceCategories', 'maintenanceRecords', 'notifications']
     const renamed = []
     for (const key of keys) {
       const arr = this._data[key]
@@ -152,6 +152,9 @@ const Store = {
       depositDeductions: [],
       notices: [],
       inquiries: [],
+      maintenanceCategories: [],
+      maintenanceRecords: [],
+      notifications: [],
     }
     this.save()
   },
@@ -165,7 +168,7 @@ const Store = {
   async _sbSaveAll() {
     const sb = getSupabase()
     if (!sb) return
-    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries']
+    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications']
     for (const table of tables) {
       const items = this._data[table]
       if (!items || !items.length) continue
@@ -409,5 +412,40 @@ const Store = {
   updateNotice(id, data) {
     const idx = this._data.notices.findIndex(n => n.id === id)
     if (idx > -1) { this._data.notices[idx] = { ...this._data.notices[idx], ...data }; this.save() }
+  },
+
+  // Maintenance Categories
+  getMaintenanceCategories() { return this._data.maintenanceCategories || [] },
+  addMaintenanceCategory(c) { this._data.maintenanceCategories.push({ id: this._nextId(), ...c }); this.save() },
+  deleteMaintenanceCategory(id) {
+    this._data.maintenanceCategories = (this._data.maintenanceCategories || []).filter(x => x.id !== id)
+    this._sbDelete('maintenanceCategories', id)
+    this.save()
+  },
+
+  // Maintenance Records
+  getMaintenanceRecords() { return this._data.maintenanceRecords || [] },
+  addMaintenanceRecord(r) { this._data.maintenanceRecords.push({ id: this._nextId(), ...r }); this.save() },
+  updateMaintenanceRecord(id, data) {
+    const idx = this._data.maintenanceRecords.findIndex(x => x.id === id)
+    if (idx > -1) { this._data.maintenanceRecords[idx] = { ...this._data.maintenanceRecords[idx], ...data }; this.save() }
+  },
+  deleteMaintenanceRecord(id) {
+    this._data.maintenanceRecords = (this._data.maintenanceRecords || []).filter(x => x.id !== id)
+    this._sbDelete('maintenanceRecords', id)
+    this.save()
+  },
+
+  // Notifications
+  getNotifications() { return this._data.notifications || [] },
+  addNotification(n) { this._data.notifications.push({ id: this._nextId(), ...n }); this.save() },
+  updateNotification(id, data) {
+    const idx = this._data.notifications.findIndex(x => x.id === id)
+    if (idx > -1) { this._data.notifications[idx] = { ...this._data.notifications[idx], ...data }; this.save() }
+  },
+  deleteNotification(id) {
+    this._data.notifications = (this._data.notifications || []).filter(x => x.id !== id)
+    this._sbDelete('notifications', id)
+    this.save()
   },
 }

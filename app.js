@@ -145,6 +145,12 @@ async function init() {
     return
   }
   restorePageState()
+  const activePage = document.querySelector('#nav a.active')
+  if (activePage) {
+    const p = activePage.dataset.page
+    if (p === 'report') { initReportPage(); renderReports() }
+    if (p === 'maintenance') renderMaintenance()
+  }
   renderAll()
   updateStats()
 }
@@ -181,6 +187,9 @@ function setupNavigation() {
       document.getElementById('page-title').textContent = a.textContent.trim()
       const tab = document.querySelector('#page-building .tab.active')
       if (tab) switchBuildingTab(tab.dataset.tab)
+      const pageId = a.dataset.page
+      if (pageId === 'report') { initReportPage(); renderReports() }
+      if (pageId === 'maintenance') renderMaintenance()
       savePageState()
     })
   })
@@ -211,6 +220,11 @@ function renderAll() {
   renderUsers()
   renderRecent()
   renderDashboardContracts()
+  renderMaintenance()
+  if (document.getElementById('page-report').classList.contains('active')) {
+    initReportPage()
+    renderReports()
+  }
 }
 
 function renderBuildings() {
@@ -895,6 +909,8 @@ function deleteUser(id) {
   document.getElementById('stat-overdue60').textContent = overdue60
   const totalPrepaid = (Store.getPrepaids() || []).reduce((s, p) => s + p.balance, 0)
   document.getElementById('stat-prepaid').textContent = fmt(totalPrepaid)
+  const collRate = totalBilling > 0 ? Math.round((totalPaid / totalBilling) * 100) : 0
+  document.getElementById('stat-collection-rate').textContent = collRate + '%'
 }
 
 /* Dashboard - contract status — 대시보드 세대별 계약현황 테이블 */
@@ -939,6 +955,7 @@ function renderDashboardContracts() {
   }).join('')
 
   renderExpiringContracts()
+  renderDashboardExtensions()
 }
 
 function renderExpiringContracts() {
@@ -1042,6 +1059,7 @@ function showModal(type, editData) {
   const title = document.getElementById('modal-title')
   const body = document.getElementById('modal-body')
   switch (type) {
+    case 'maintenance': { showMaintenanceModal(editData); return }
     case 'building': {
       title.textContent = editData ? '건물 수정' : '건물 추가'
       body.innerHTML = `
@@ -1426,6 +1444,7 @@ function closeModal(e) {
 function saveModal() {
   const type = state.currentModal
   switch (type) {
+    case 'maintenance': { saveMaintenanceModal(); break }
     case 'building': {
       const data = {
         name: document.getElementById('f-bname').value.trim(),
@@ -2059,6 +2078,280 @@ function overdueBadge(days) {
   if (days <= 30) return { cls: 'badge-pending', label: days + '일 연체' }
   if (days <= 60) return { cls: 'badge-unpaid', label: days + '일 연체' }
   return { cls: 'badge-danger', label: days + '일 연체 (심각)' }
+}
+
+/* ===== 대시보드 확장 ===== */
+
+function renderDashboardExtensions() {
+  renderTop5Arrears()
+  renderCollectionChart()
+  renderDashMaintenance()
+}
+
+function renderTop5Arrears() {
+  const el = document.getElementById('dash-top5')
+  if (!el) return
+  const overdue = Store.getOverdueBills()
+  const byUnit = {}
+  for (const o of overdue) {
+    if (!byUnit[o.bill.unitId]) byUnit[o.bill.unitId] = 0
+    byUnit[o.bill.unitId] += o.unpaid
+  }
+  const sorted = Object.keys(byUnit)
+    .map(uid => ({ unitId: parseInt(uid), unpaid: byUnit[uid] }))
+    .sort((a, b) => b.unpaid - a.unpaid)
+    .slice(0, 5)
+  if (!sorted.length) {
+    el.innerHTML = '<span style="color:#888">미수금이 없습니다.</span>'
+    return
+  }
+  el.innerHTML = sorted.map((r, i) => {
+    const unit = Store.getUnits().find(u => u.id === r.unitId)
+    return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f5f5f5">
+      <span><strong>${i + 1}.</strong> ${esc(unit ? unit.name : '?')}</span>
+      <span style="color:#c62828;font-weight:600">${fmt(r.unpaid)}</span>
+    </div>`
+  }).join('')
+}
+
+function renderCollectionChart() {
+  const canvas = document.getElementById('dash-collection-chart')
+  if (!canvas) return
+  const bills = Store.getBills()
+  const payments = Store.getPayments()
+  const ymMap = {}
+  bills.forEach(b => {
+    if (!ymMap[b.yearMonth]) ymMap[b.yearMonth] = { total: 0, paid: 0 }
+    ymMap[b.yearMonth].total += b.total || 0
+  })
+  payments.forEach(p => {
+    const b = bills.find(bx => bx.id === p.billId)
+    if (b && ymMap[b.yearMonth]) ymMap[b.yearMonth].paid += p.amount || 0
+  })
+  const sorted = Object.keys(ymMap).sort().slice(-6)
+  const labels = sorted.map(ym => ym.slice(2))
+  const rates = sorted.map(ym => {
+    const d = ymMap[ym]
+    return d.total > 0 ? Math.round((d.paid / d.total) * 100) : 0
+  })
+  Chart.bar(canvas, labels, rates, {
+    width: canvas.parentNode.clientWidth || 400,
+    height: 160, barColor: '#2d5427',
+    padding: { top: 16, right: 8, bottom: 28, left: 36 },
+  })
+  const avg = rates.length ? Math.round(rates.reduce((s, v) => s + v, 0) / rates.length) : 0
+  document.getElementById('dash-collection-rate').textContent = `평균 ${avg}%`
+}
+
+function renderDashMaintenance() {
+  const el = document.getElementById('dash-maintenance')
+  const countEl = document.getElementById('dash-mnt-count')
+  if (!el) return
+  const records = Store.getMaintenanceRecords().filter(r => r.status === 'in_progress' || r.status === 'pending')
+    .sort((a, b) => (a.id > b.id ? -1 : 1)).slice(0, 5)
+  if (countEl) countEl.textContent = records.length + '건'
+  if (!records.length) {
+    el.innerHTML = '<span style="color:#888">진행중인 유지보수가 없습니다.</span>'
+    return
+  }
+  el.innerHTML = records.map(r => {
+    const unit = Store.getUnits().find(u => u.id === r.unitId)
+    const cat = Store.getMaintenanceCategories().find(c => c.id === r.categoryId)
+    const statusLabel = r.status === 'in_progress' ? '진행중' : '접수'
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f5f5f5;font-size:13px">
+      <span><strong>${esc(unit ? unit.name : '?')}</strong> - ${esc(cat ? cat.name : r.title)}</span>
+      <span style="color:${r.status === 'in_progress' ? '#1565c0' : '#e65100'}">${statusLabel}</span>
+    </div>`
+  }).join('')
+}
+
+/* ===== 유지보수 페이지 ===== */
+
+let mntStatusFilter = ''
+
+function setMntFilter(status) {
+  mntStatusFilter = status
+  document.querySelectorAll('.mnt-filter-btn').forEach(b => {
+    b.style.background = b.dataset.mnt === status ? '#2d5427' : '#e8eaed'
+    b.style.color = b.dataset.mnt === status ? '#fff' : '#555'
+    b.style.fontWeight = b.dataset.mnt === status ? '600' : '400'
+  })
+  renderMaintenance()
+}
+
+function renderMaintenance() {
+  const tbody = document.getElementById('mnt-tbody')
+  const summaryTotal = document.getElementById('mnt-total')
+  const summaryPending = document.getElementById('mnt-pending')
+  const summaryProgress = document.getElementById('mnt-progress')
+  const summaryDone = document.getElementById('mnt-done')
+  const summaryCost = document.getElementById('mnt-cost')
+  if (!tbody) return
+
+  let records = Store.getMaintenanceRecords()
+  const q = (document.getElementById('mnt-search')?.value || '').toLowerCase()
+  if (q) {
+    records = records.filter(r => {
+      const unit = Store.getUnits().find(u => u.id === r.unitId)
+      return (r.title || '').toLowerCase().includes(q) ||
+        (unit && unit.name.toLowerCase().includes(q))
+    })
+  }
+  if (mntStatusFilter) {
+    records = records.filter(r => r.status === mntStatusFilter)
+  }
+  records.sort((a, b) => (b.id || 0) - (a.id || 0))
+
+  if (summaryTotal) {
+    const all = Store.getMaintenanceRecords()
+    summaryTotal.textContent = all.length
+    summaryPending.textContent = all.filter(r => r.status === 'pending').length
+    summaryProgress.textContent = all.filter(r => r.status === 'in_progress').length
+    summaryDone.textContent = all.filter(r => r.status === 'completed').length
+    summaryCost.textContent = fmt(all.reduce((s, r) => s + (r.cost || 0), 0))
+  }
+
+  if (!records.length) {
+    tbody.innerHTML = '<tr><td colspan="11">유지보수 내역이 없습니다.</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = records.map((r, i) => {
+    const unit = Store.getUnits().find(u => u.id === r.unitId)
+    const cat = Store.getMaintenanceCategories().find(c => c.id === r.categoryId)
+    const statusBadge = r.status === 'completed' ? 'badge-paid'
+      : r.status === 'in_progress' ? 'badge-pending'
+      : r.status === 'cancelled' ? 'badge-unpaid' : 'badge-pending'
+    const statusLabel = r.status === 'completed' ? '완료'
+      : r.status === 'in_progress' ? '진행중'
+      : r.status === 'cancelled' ? '취소' : '접수'
+    const priorityLabel = { low: '낮음', normal: '보통', high: '높음', emergency: '긴급' }[r.priority] || '보통'
+    const priorityCls = r.priority === 'high' ? 'mnt-priority-high'
+      : r.priority === 'emergency' ? 'mnt-priority-emergency'
+      : r.priority === 'normal' ? 'mnt-priority-normal' : ''
+    return `<tr class="${priorityCls}">
+      <td>${records.length - i}</td>
+      <td><a href="#" onclick="editMaintenance(${r.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? esc(unit.name) : '?'}</a></td>
+      <td>${esc(cat ? cat.name : '-')}</td>
+      <td>${esc(r.title || '')}</td>
+      <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
+      <td style="font-size:12px">${priorityLabel}</td>
+      <td>${fmt(r.cost || 0)}</td>
+      <td>${esc(r.vendor || '-')}</td>
+      <td>${r.scheduledDate || '-'}</td>
+      <td>${r.completedDate || '-'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary" onclick="editMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">수정</button>
+        <button class="btn btn-secondary" onclick="deleteMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">삭제</button>
+        ${r.status === 'pending' ? `<button class="btn btn-primary" onclick="startMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">시작</button>` : ''}
+        ${r.status === 'in_progress' ? `<button class="btn btn-primary" onclick="completeMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">완료</button>` : ''}
+      </td>
+    </tr>`
+  }).join('')
+}
+
+function editMaintenance(id) {
+  const item = Store.getMaintenanceRecords().find(r => r.id === id)
+  if (item) showModal('maintenance', item)
+}
+
+function deleteMaintenance(id) {
+  if (!confirm('삭제하시겠습니까?')) return
+  Store.deleteMaintenanceRecord(id)
+  renderAll()
+  updateStats()
+}
+
+function startMaintenance(id) {
+  if (!confirm('진행중으로 변경하시겠습니까?')) return
+  Store.updateMaintenanceRecord(id, { status: 'in_progress', updatedAt: new Date().toISOString() })
+  renderAll()
+}
+
+function completeMaintenance(id) {
+  const r = Store.getMaintenanceRecords().find(x => x.id === id)
+  const cost = prompt('완료 처리합니다. 총 비용을 입력하세요 (원):', String(r ? (r.cost || 0) : 0))
+  if (cost === null) return
+  const result = prompt('작업 결과 / 특이사항을 입력하세요:', r ? (r.result || '') : '')
+  Store.updateMaintenanceRecord(id, {
+    status: 'completed',
+    completedDate: new Date().toISOString().slice(0, 10),
+    cost: parseInt(cost.replace(/,/g, '')) || 0,
+    result: result || '',
+    updatedAt: new Date().toISOString(),
+  })
+  renderAll()
+  updateStats()
+}
+
+/* ===== showModal / saveModal maintenance case ===== */
+
+function showMaintenanceModal(editData) {
+  const title = document.getElementById('modal-title')
+  const body = document.getElementById('modal-body')
+  title.textContent = editData ? '유지보수 수정' : '유지보수 등록'
+  const units = Store.getUnits()
+  const cats = Store.getMaintenanceCategories()
+  body.innerHTML = `
+    <div class="form-group"><label>세대</label><select id="f-mnt-unit">${
+      units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')
+    }</select></div>
+    <div class="form-group"><label>항목</label><select id="f-mnt-cat"><option value="">직접 입력</option>${
+      cats.map(c => `<option value="${c.id}" ${editData && editData.categoryId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')
+    }</select></div>
+    <div class="form-group"><label>제목</label><input id="f-mnt-title" value="${editData ? esc(editData.title || '') : ''}"></div>
+    <div class="form-group"><label>상세 설명</label><textarea id="f-mnt-desc" rows="3">${editData ? esc(editData.description || '') : ''}</textarea></div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>우선순위</label><select id="f-mnt-priority">
+        <option value="low" ${editData && editData.priority === 'low' ? 'selected' : ''}>낮음</option>
+        <option value="normal" ${editData && editData.priority === 'normal' ? 'selected' : ''}>보통</option>
+        <option value="high" ${editData && editData.priority === 'high' ? 'selected' : ''}>높음</option>
+        <option value="emergency" ${editData && editData.priority === 'emergency' ? 'selected' : ''}>긴급</option>
+      </select></div>
+      <div class="form-group" style="flex:1"><label>상태</label><select id="f-mnt-status">
+        <option value="pending" ${!editData || editData.status === 'pending' ? 'selected' : ''}>접수</option>
+        <option value="in_progress" ${editData && editData.status === 'in_progress' ? 'selected' : ''}>진행중</option>
+        <option value="completed" ${editData && editData.status === 'completed' ? 'selected' : ''}>완료</option>
+        <option value="cancelled" ${editData && editData.status === 'cancelled' ? 'selected' : ''}>취소</option>
+      </select></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>비용 (원)</label><input id="f-mnt-cost" type="text" inputmode="numeric" value="${editData ? fm(editData.cost || 0) : ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
+      <div class="form-group" style="flex:1"><label>예정일</label><input id="f-mnt-sdate" type="date" value="${editData && editData.scheduledDate ? editData.scheduledDate : ''}"></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>업체명</label><input id="f-mnt-vendor" value="${editData ? esc(editData.vendor || '') : ''}"></div>
+      <div class="form-group" style="flex:1"><label>업체 연락처</label><input id="f-mnt-vcontact" value="${editData ? esc(editData.vendorContact || '') : ''}"></div>
+    </div>
+    ${editData && (editData.status === 'completed' || editData.completedDate) ? `
+    <div class="form-group"><label>완료일</label><input id="f-mnt-cdate" type="date" value="${editData.completedDate || ''}"></div>
+    <div class="form-group"><label>작업 결과</label><textarea id="f-mnt-result" rows="2">${esc(editData.result || '')}</textarea></div>
+    ` : ''}
+  `
+}
+
+function saveMaintenanceModal() {
+  const data = {
+    unitId: parseInt(document.getElementById('f-mnt-unit').value),
+    categoryId: parseInt(document.getElementById('f-mnt-cat').value) || null,
+    title: document.getElementById('f-mnt-title').value.trim(),
+    description: document.getElementById('f-mnt-desc').value.trim(),
+    priority: document.getElementById('f-mnt-priority').value,
+    status: document.getElementById('f-mnt-status').value,
+    cost: parseInt(document.getElementById('f-mnt-cost').value.replace(/,/g, '')) || 0,
+    scheduledDate: document.getElementById('f-mnt-sdate').value,
+    vendor: document.getElementById('f-mnt-vendor').value.trim(),
+    vendorContact: document.getElementById('f-mnt-vcontact').value.trim(),
+    updatedAt: new Date().toISOString(),
+  }
+  const cdateEl = document.getElementById('f-mnt-cdate')
+  const resultEl = document.getElementById('f-mnt-result')
+  if (cdateEl) data.completedDate = cdateEl.value
+  if (resultEl) data.result = resultEl.value.trim()
+  if (!data.title) return alert('제목을 입력하세요.')
+  if (!data.unitId) return alert('세대를 선택하세요.')
+  if (state.editingId) Store.updateMaintenanceRecord(state.editingId, data)
+  else Store.addMaintenanceRecord(data)
 }
 
 init()

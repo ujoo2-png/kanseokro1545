@@ -374,7 +374,7 @@ function applyAuthUI() {
     if (!user) { a.style.display = 'none'; return }
     if (user.role === 'admin') { a.style.display = 'block'; return }
     if (user.role === 'manager') {
-      a.style.display = ['dashboard', 'meter', 'billing', 'payment', 'inquiry', 'settings'].includes(page) ? 'block' : 'none'
+      a.style.display = ['dashboard', 'meter', 'billing', 'payment', 'report', 'maintenance', 'notice', 'inquiry', 'settings'].includes(page) ? 'block' : 'none'
       return
     }
     if (user.role === 'tenant') {
