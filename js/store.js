@@ -1,6 +1,6 @@
 /*
  * store.js — localStorage + Supabase 하이브리드 저장소
- * 간석로1545 관리자 시스템 v1.15.0
+ * 간석로1545 관리자 시스템 v1.15.3
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
 
@@ -94,7 +94,17 @@ const Store = {
     for (const table of tables) {
       try {
         const { data } = await sb.from(this._sbTable(table)).select('*')
-        if (data) this._data[table] = this._toCamel(data)
+        if (data) {
+          const remote = this._toCamel(data)
+          const local = this._data[table] || []
+          const merged = [...local]
+          for (const r of remote) {
+            const idx = merged.findIndex(x => x.id === r.id)
+            if (idx > -1) merged[idx] = r
+            else merged.push(r)
+          }
+          this._data[table] = merged
+        }
       } catch (e) { console.warn('Supabase load error:', table, e) }
     }
     this.save()
