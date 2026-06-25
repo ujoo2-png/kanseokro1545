@@ -10,8 +10,12 @@ CREATE TABLE IF NOT EXISTS maintenance_categories (
 );
 
 ALTER TABLE maintenance_categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_all_maintenance_categories ON maintenance_categories;
 CREATE POLICY anon_all_maintenance_categories ON maintenance_categories
   FOR ALL USING (true) WITH CHECK (true);
+
+-- UNIQUE constraint on name for ON CONFLICT support and deduplication
+ALTER TABLE maintenance_categories ADD CONSTRAINT maintenance_categories_name_key UNIQUE (name);
 
 -- 2. maintenance_records (유지보수 실시 기록)
 CREATE TABLE IF NOT EXISTS maintenance_records (
@@ -74,4 +78,7 @@ INSERT INTO maintenance_categories (name, category) VALUES
   ('도어락 교체', 'repair'),
   ('방역', 'inspection'),
   ('기타', 'other')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
+
+-- 5. units 테이블에 billing_type 컬럼 추가 (통합 청구 / 개별 신고)
+ALTER TABLE units ADD COLUMN IF NOT EXISTS billing_type TEXT DEFAULT 'integrated' CHECK (billing_type IN ('integrated','individual'));

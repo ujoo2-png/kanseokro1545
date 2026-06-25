@@ -302,17 +302,19 @@ function renderUnits() {
     )
   }
   if (!units.length) {
-    tbody.innerHTML = '<tr><td colspan="11">등록된 세대가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="13">등록된 세대가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = units.map(u => {
     const bld = Store.getBuildings().find(b => b.id === u.buildingId)
     const hasActive = !!Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
     const vacantClass = hasActive ? '' : 'row-vacant'
+    const billLabel = u.billingType === 'individual' ? '<span class="badge badge-pending">개별신고</span>' : '<span class="badge badge-paid">통합청구</span>'
     return `<tr class="${vacantClass}">
       <td><a href="#" onclick="editUnit(${u.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${u.name}</a></td>
       <td>${bld ? bld.name : '-'}</td>
       <td>${u.area ? u.area + '평' : '-'}</td>
+      <td>${billLabel}</td>
       <td>${yn(u.hasAC)}</td>
       <td>${yn(u.hasTV)}</td>
       <td>${yn(u.hasFridge)}</td>
@@ -1086,6 +1088,10 @@ function showModal(type, editData) {
         <div class="form-group"><label>건물</label><select id="f-ubuilding"><option value="">선택 안함</option>${
           buildings.map(b => `<option value="${b.id}" ${editData && editData.buildingId === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')
         }</select></div>
+        <div class="form-group"><label>청구 방식</label><select id="f-ubilltype">
+          <option value="integrated" ${(!editData || editData.billingType === 'integrated') ? 'selected' : ''}>통합 청구 (검침 기준)</option>
+          <option value="individual" ${editData && editData.billingType === 'individual' ? 'selected' : ''}>개별 신고 (직접 납부)</option>
+        </select></div>
         <h4 style="margin:16px 0 8px;font-size:14px;color:#555">옵션 정보</h4>
         <div class="form-group"><label>평수</label><input id="f-uarea" type="number" value="${editData ? editData.area || '' : ''}"></div>
         <div class="form-group"><label>냉난방기</label><select id="f-uac"><option value="false">무</option><option value="true" ${selYn('hasAC') ? 'selected' : ''}>유</option></select></div>
@@ -1466,6 +1472,7 @@ function saveModal() {
       const data = {
         buildingId: parseInt(document.getElementById('f-ubuilding').value) || null,
         name: document.getElementById('f-uname').value.trim(),
+        billingType: document.getElementById('f-ubilltype').value,
         area: parseInt(document.getElementById('f-uarea').value) || 0,
         hasAC: document.getElementById('f-uac').value === 'true',
         hasTV: document.getElementById('f-utv').value === 'true',
@@ -1747,7 +1754,7 @@ function generateBills() {
   const units = Store.getUnits()
   if (!units.length) return alert('등록된 세대가 없습니다.')
   const ym = new Date().toISOString().slice(0, 7)
-  const activeUnits = units.filter(u => Store.getContracts().find(c => c.unitId === u.id && c.status === 'active'))
+  const activeUnits = units.filter(u => u.billingType !== 'individual' && Store.getContracts().find(c => c.unitId === u.id && c.status === 'active'))
   if (!activeUnits.length) return alert('계약중인 세대가 없습니다.')
   const missingMeters = activeUnits.filter(u => {
     const meters = Store.getMeters().filter(m => m.unitId === u.id)
@@ -2292,12 +2299,14 @@ function showMaintenanceModal(editData) {
   title.textContent = editData ? '유지보수 수정' : '유지보수 등록'
   const units = Store.getUnits()
   const cats = Store.getMaintenanceCategories()
+  const seen = new Set()
+  const uniqueCats = cats.filter(c => { const dup = seen.has(c.name); seen.add(c.name); return !dup })
   body.innerHTML = `
     <div class="form-group"><label>세대</label><select id="f-mnt-unit">${
       units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')
     }</select></div>
     <div class="form-group"><label>항목</label><select id="f-mnt-cat"><option value="">직접 입력</option>${
-      cats.map(c => `<option value="${c.id}" ${editData && editData.categoryId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')
+      uniqueCats.map(c => `<option value="${c.id}" ${editData && editData.categoryId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')
     }</select></div>
     <div class="form-group"><label>제목</label><input id="f-mnt-title" value="${editData ? esc(editData.title || '') : ''}"></div>
     <div class="form-group"><label>상세 설명</label><textarea id="f-mnt-desc" rows="3">${editData ? esc(editData.description || '') : ''}</textarea></div>
