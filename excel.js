@@ -27,8 +27,8 @@ function exportBuildings() {
 
 function exportUnits() {
   const list = Store.getUnits()
-  const rows = [['세대명', '건물', '평수', '청구방식', '냉난방기', 'TV', '냉장고', '세탁기', 'TV거실장', '침대', '옷장']]
-  list.forEach(u => rows.push([u.name, _buildingName(u.buildingId), u.area || '', u.billingType === 'individual' ? '개별신고' : '통합청구', u.hasAC ? 'O' : '', u.hasTV ? 'O' : '', u.hasFridge ? 'O' : '', u.hasWasher ? 'O' : '', u.hasTVStand ? 'O' : '', u.hasBed ? 'O' : '', u.hasCloset ? 'O' : '']))
+  const rows = [['세대명', '건물', '평수', '전기', '수도', '냉난방기', 'TV', '냉장고', '세탁기', 'TV거실장', '침대', '옷장']]
+  list.forEach(u => rows.push([u.name, _buildingName(u.buildingId), u.area || '', u.elecBillingType === 'individual' ? '개별신고' : '통합청구', u.waterBillingType === 'individual' ? '개별신고' : '통합청구', u.hasAC ? 'O' : '', u.hasTV ? 'O' : '', u.hasFridge ? 'O' : '', u.hasWasher ? 'O' : '', u.hasTVStand ? 'O' : '', u.hasBed ? 'O' : '', u.hasCloset ? 'O' : '']))
   _excelDownload('세대목록.xlsx', { 세대목록: rows })
 }
 

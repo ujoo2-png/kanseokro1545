@@ -85,5 +85,6 @@ INSERT INTO maintenance_categories (name, category) VALUES
   ('기타', 'other')
 ON CONFLICT (name) DO NOTHING;
 
--- 5. units 테이블에 billing_type 컬럼 추가 (통합 청구 / 개별 신고)
-ALTER TABLE units ADD COLUMN IF NOT EXISTS billing_type TEXT DEFAULT 'integrated' CHECK (billing_type IN ('integrated','individual'));
+-- 5. units 테이블에 전기/수도 개별 청구 방식 컬럼 추가
+ALTER TABLE units ADD COLUMN IF NOT EXISTS elec_billing_type TEXT DEFAULT 'integrated' CHECK (elec_billing_type IN ('integrated','individual'));
+ALTER TABLE units ADD COLUMN IF NOT EXISTS water_billing_type TEXT DEFAULT 'integrated' CHECK (water_billing_type IN ('integrated','individual'));

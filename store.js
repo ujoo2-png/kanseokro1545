@@ -1,9 +1,9 @@
 /*
  * store.js — localStorage + Supabase 하이브리드 저장소
- * 간석로1545 관리자 시스템 v1.15.7
+ * 간석로1545 관리자 시스템 v1.15.8
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.15.7'
+const APP_VERSION = 'v1.15.8'
 
 const Store = {
   _data: null,
@@ -232,11 +232,11 @@ const Store = {
   /** @returns {Array} 세대 목록 */
   getUnits() { return this._data.units },
   /** 세대 추가 */
-  addUnit(u) { this._data.units.push({ id: this._nextId(), ...u }); this.save() },
+  addUnit(u) { const unit = { id: this._nextId(), ...u }; this._data.units.push(unit); this._sbSync('units', unit); this.save() },
   /** 세대 수정 */
   updateUnit(id, data) {
     const idx = this._data.units.findIndex(u => u.id === id)
-    if (idx > -1) { this._data.units[idx] = { ...this._data.units[idx], ...data }; this.save() }
+    if (idx > -1) { this._data.units[idx] = { ...this._data.units[idx], ...data }; this._sbSync('units', this._data.units[idx]); this.save() }
   },
   /** 세대 삭제 + 연결된 검침/청구/수납/계약 모두 제거 */
   deleteUnit(id) {

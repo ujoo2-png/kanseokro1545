@@ -1,6 +1,6 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.15.7
+ * 간석로1545 관리자 시스템 v1.15.8
  *
  * 히스토리
  * vv1.15.5 (2026-06) 모바일 URL 기본값 Vercel로 변경
@@ -309,12 +309,13 @@ function renderUnits() {
     const bld = Store.getBuildings().find(b => b.id === u.buildingId)
     const hasActive = !!Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
     const vacantClass = hasActive ? '' : 'row-vacant'
-    const billLabel = u.billingType === 'individual' ? '<span class="badge badge-pending">개별신고</span>' : '<span class="badge badge-paid">통합청구</span>'
+    const bil = (t, v) => v === 'individual' ? `<span class="badge badge-pending" style="font-size:10px">${t} 개별</span>` : `<span class="badge badge-paid" style="font-size:10px">${t} 통합</span>`
+    const billLabels = `${bil('전기', u.elecBillingType)} ${bil('수도', u.waterBillingType)}`
     return `<tr class="${vacantClass}">
       <td><a href="#" onclick="editUnit(${u.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${u.name}</a></td>
       <td>${bld ? bld.name : '-'}</td>
       <td>${u.area ? u.area + '평' : '-'}</td>
-      <td>${billLabel}</td>
+      <td>${billLabels}</td>
       <td>${yn(u.hasAC)}</td>
       <td>${yn(u.hasTV)}</td>
       <td>${yn(u.hasFridge)}</td>
@@ -1088,10 +1089,17 @@ function showModal(type, editData) {
         <div class="form-group"><label>건물</label><select id="f-ubuilding"><option value="">선택 안함</option>${
           buildings.map(b => `<option value="${b.id}" ${editData && editData.buildingId === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')
         }</select></div>
-        <div class="form-group"><label>청구 방식</label><select id="f-ubilltype">
-          <option value="integrated" ${(!editData || editData.billingType === 'integrated') ? 'selected' : ''}>통합 청구 (검침 기준)</option>
-          <option value="individual" ${editData && editData.billingType === 'individual' ? 'selected' : ''}>개별 신고 (직접 납부)</option>
-        </select></div>
+        <h4 style="margin:16px 0 8px;font-size:14px;color:#555">청구 방식</h4>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1"><label>전기</label><select id="f-uelec">
+            <option value="integrated" ${(!editData || editData.elecBillingType !== 'individual') ? 'selected' : ''}>통합 청구</option>
+            <option value="individual" ${editData && editData.elecBillingType === 'individual' ? 'selected' : ''}>개별 신고</option>
+          </select></div>
+          <div class="form-group" style="flex:1"><label>수도</label><select id="f-uwat">
+            <option value="integrated" ${(!editData || editData.waterBillingType !== 'individual') ? 'selected' : ''}>통합 청구</option>
+            <option value="individual" ${editData && editData.waterBillingType === 'individual' ? 'selected' : ''}>개별 신고</option>
+          </select></div>
+        </div>
         <h4 style="margin:16px 0 8px;font-size:14px;color:#555">옵션 정보</h4>
         <div class="form-group"><label>평수</label><input id="f-uarea" type="number" value="${editData ? editData.area || '' : ''}"></div>
         <div class="form-group"><label>냉난방기</label><select id="f-uac"><option value="false">무</option><option value="true" ${selYn('hasAC') ? 'selected' : ''}>유</option></select></div>
@@ -1472,7 +1480,8 @@ function saveModal() {
       const data = {
         buildingId: parseInt(document.getElementById('f-ubuilding').value) || null,
         name: document.getElementById('f-uname').value.trim(),
-        billingType: document.getElementById('f-ubilltype').value,
+        elecBillingType: document.getElementById('f-uelec').value,
+        waterBillingType: document.getElementById('f-uwat').value,
         area: parseInt(document.getElementById('f-uarea').value) || 0,
         hasAC: document.getElementById('f-uac').value === 'true',
         hasTV: document.getElementById('f-utv').value === 'true',
@@ -1754,9 +1763,11 @@ function generateBills() {
   const units = Store.getUnits()
   if (!units.length) return alert('등록된 세대가 없습니다.')
   const ym = new Date().toISOString().slice(0, 7)
-  const activeUnits = units.filter(u => u.billingType !== 'individual' && Store.getContracts().find(c => c.unitId === u.id && c.status === 'active'))
+  const activeUnits = units.filter(u => Store.getContracts().find(c => c.unitId === u.id && c.status === 'active'))
   if (!activeUnits.length) return alert('계약중인 세대가 없습니다.')
+  const needMeter = u => u.elecBillingType !== 'individual' || u.waterBillingType !== 'individual'
   const missingMeters = activeUnits.filter(u => {
+    if (!needMeter(u)) return false
     const meters = Store.getMeters().filter(m => m.unitId === u.id)
     return meters.length < 2
   })
@@ -1785,10 +1796,14 @@ function generateBills() {
     let elecCost = 0, waterCost = 0
     let elecUsage = 0, waterUsage = 0
     if (lastMeter && prevMeter) {
-      elecUsage = Math.max(0, lastMeter.electricity - prevMeter.electricity)
-      waterUsage = Math.max(0, lastMeter.water - prevMeter.water)
-      elecCost = calcElec(elecUsage)
-      waterCost = calcWater(waterUsage)
+      if (u.elecBillingType !== 'individual') {
+        elecUsage = Math.max(0, lastMeter.electricity - prevMeter.electricity)
+        elecCost = calcElec(elecUsage)
+      }
+      if (u.waterBillingType !== 'individual') {
+        waterUsage = Math.max(0, lastMeter.water - prevMeter.water)
+        waterCost = calcWater(waterUsage)
+      }
     }
     const wf = WELFARE[welfareId]
     const elecDiscount = wf ? wf.elecDiscount : 0
