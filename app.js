@@ -1,6 +1,6 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.15.8
+ * 간석로1545 관리자 시스템 v1.15.9
  *
  * 히스토리
  * vv1.15.5 (2026-06) 모바일 URL 기본값 Vercel로 변경
@@ -292,6 +292,8 @@ function showContractHistory(unitId) {
     <button class="btn btn-primary" onclick="closeModal();showModal('contract',{unitId:${unitId}})" style="font-size:12px">+ 새 계약 등록</button>`
 }
 
+let _unitPage = 0
+const UNIT_PAGE_SIZE = 25
 function renderUnits() {
   const tbody = document.getElementById('unit-tbody')
   let units = Store.getUnits()
@@ -302,16 +304,22 @@ function renderUnits() {
     )
   }
   if (!units.length) {
-    tbody.innerHTML = '<tr><td colspan="13">등록된 세대가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="14">등록된 세대가 없습니다.</td></tr>'
+    document.getElementById('unit-pagination').innerHTML = ''
     return
   }
-  tbody.innerHTML = units.map(u => {
+  const totalPages = Math.ceil(units.length / UNIT_PAGE_SIZE)
+  if (_unitPage >= totalPages) _unitPage = totalPages - 1
+  const start = _unitPage * UNIT_PAGE_SIZE
+  const pageUnits = units.slice(start, start + UNIT_PAGE_SIZE)
+  tbody.innerHTML = pageUnits.map((u, i) => {
     const bld = Store.getBuildings().find(b => b.id === u.buildingId)
     const hasActive = !!Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
     const vacantClass = hasActive ? '' : 'row-vacant'
     const bil = (t, v) => v === 'individual' ? `<span class="badge badge-pending" style="font-size:10px">${t} 개별</span>` : `<span class="badge badge-paid" style="font-size:10px">${t} 통합</span>`
     const billLabels = `${bil('전기', u.elecBillingType)} ${bil('수도', u.waterBillingType)}`
     return `<tr class="${vacantClass}">
+      <td style="color:#888;font-size:12px">${start + i + 1}</td>
       <td><a href="#" onclick="editUnit(${u.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${u.name}</a></td>
       <td>${bld ? bld.name : '-'}</td>
       <td>${u.area ? u.area + '평' : '-'}</td>
@@ -332,6 +340,20 @@ function renderUnits() {
       </td>
     </tr>`
   }).join('')
+  renderUnitPagination(totalPages)
+}
+function renderUnitPagination(totalPages) {
+  const el = document.getElementById('unit-pagination')
+  if (totalPages <= 1) { el.innerHTML = ''; return }
+  let html = ''
+  html += `<button class="btn btn-secondary" onclick="_unitPage=Math.max(0,_unitPage-1);renderUnits()" style="padding:3px 10px;font-size:12px" ${_unitPage === 0 ? 'disabled' : ''}>◀ 이전</button>`
+  const from = Math.max(0, _unitPage - 2)
+  const to = Math.min(totalPages, _unitPage + 3)
+  for (let p = from; p < to; p++) {
+    html += `<button class="btn ${p === _unitPage ? 'btn-primary' : 'btn-secondary'}" onclick="_unitPage=${p};renderUnits()" style="padding:3px 10px;font-size:12px">${p + 1}</button>`
+  }
+  html += `<button class="btn btn-secondary" onclick="_unitPage=Math.min(${totalPages - 1},_unitPage+1);renderUnits()" style="padding:3px 10px;font-size:12px" ${_unitPage >= totalPages - 1 ? 'disabled' : ''}>다음 ▶</button>`
+  el.innerHTML = html
 }
 
 function renderContracts() {
@@ -1758,23 +1780,13 @@ function deleteNotice(id) {
   renderAll()
 }
 
-/** 청구 생성 — 계약중 세대별 검침 기반 전기/수도 요금 계산 + 복지할인 반영 후 Bill 저장 */
+/** 청구 생성 — 검침 기반 전기/수도 요금 계산 후 Bill 저장 (계약 유무 무관) */
 function generateBills() {
   const units = Store.getUnits()
   if (!units.length) return alert('등록된 세대가 없습니다.')
   const ym = new Date().toISOString().slice(0, 7)
-  const activeUnits = units.filter(u => Store.getContracts().find(c => c.unitId === u.id && c.status === 'active'))
-  if (!activeUnits.length) return alert('계약중인 세대가 없습니다.')
-  const needMeter = u => u.elecBillingType !== 'individual' || u.waterBillingType !== 'individual'
-  const missingMeters = activeUnits.filter(u => {
-    if (!needMeter(u)) return false
-    const meters = Store.getMeters().filter(m => m.unitId === u.id)
-    return meters.length < 2
-  })
-  if (missingMeters.length) {
-    showModal('meter-required', { units: missingMeters })
-    return
-  }
+  const billUnits = units.filter(u => u.elecBillingType !== 'individual' || u.waterBillingType !== 'individual')
+  if (!billUnits.length) return alert('통합 청구 대상 세대가 없습니다.')
   const existing = Store.getBills().filter(b => b.yearMonth === ym)
   if (existing.length) {
     if (!confirm(`${ym} 청구가 이미 ${existing.length}건 있습니다. 다시 생성하시겠습니까?`)) return
@@ -1785,7 +1797,7 @@ function generateBills() {
   if (commonInput === null) return
   const commonFeePerUnit = parseInt(commonInput) || 0
   const prevYm = getPrevYearMonth(ym)
-  for (const u of activeUnits) {
+  for (const u of billUnits) {
     const contract = Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
     const rent = contract ? contract.rent : 0
     const maintenanceFee = contract ? contract.maintenanceFee : 0

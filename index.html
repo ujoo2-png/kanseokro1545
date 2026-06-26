@@ -11,7 +11,7 @@
     <aside id="sidebar">
       <div class="sidebar-header" onclick="goHome()" style="cursor:pointer">
         <h1>간석로1545</h1>
-        <p class="subtitle">관리자 시스템 v1.15.8</p>
+        <p class="subtitle" id="version-label">관리자 시스템</p>
       </div>
       <nav id="nav">
         <ul>
@@ -222,11 +222,12 @@
                 </div>
               </div>
               <table>
-                <thead><tr><th>세대</th><th>건물</th><th>평수</th><th>전기/수도</th><th>냉난방기</th><th>TV</th><th>냉장고</th><th>세탁기</th><th>TV거실장</th><th>침대</th><th>옷장</th><th>계약</th><th>관리</th></tr></thead>
+                <thead><tr><th style="width:40px">No</th><th>세대</th><th>건물</th><th>평수</th><th>전기/수도</th><th>냉난방기</th><th>TV</th><th>냉장고</th><th>세탁기</th><th>TV거실장</th><th>침대</th><th>옷장</th><th>계약</th><th>관리</th></tr></thead>
                 <tbody id="unit-tbody">
-                  <tr><td colspan="13">등록된 세대가 없습니다.</td></tr>
+                  <tr><td colspan="14">등록된 세대가 없습니다.</td></tr>
                 </tbody>
               </table>
+              <div id="unit-pagination" style="display:flex;justify-content:center;align-items:center;gap:6px;padding:12px 0;font-size:13px"></div>
             </div>
           </div>
 
@@ -505,5 +506,6 @@
   <script src="app.js" defer></script>
   <script src="report.js" defer></script>
   <script src="excel.js" defer></script>
+  <script>document.getElementById('version-label').textContent += ' ' + (window.Store?.version || 'v1.15.9')</script>
 </body>
 </html>

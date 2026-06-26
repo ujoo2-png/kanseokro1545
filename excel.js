@@ -83,7 +83,15 @@ function importMeters() {
       const unitName_ = String(row[0]).trim()
       const unit = Store.getUnits().find(u => u.name === unitName_)
       if (!unit) { console.warn('세대를 찾을 수 없음:', unitName_); continue }
-      const date = row[1] ? String(row[1]).trim() : new Date().toISOString().slice(0, 10)
+      let date = new Date().toISOString().slice(0, 10)
+      if (row[1]) {
+        if (typeof row[1] === 'number') {
+          const d = new Date((row[1] - 25569) * 86400 * 1000)
+          if (!isNaN(d)) date = d.toISOString().slice(0, 10)
+        } else {
+          date = String(row[1]).trim()
+        }
+      }
       const elec = parseFloat(row[2]) || 0
       const water = parseFloat(row[3]) || 0
       Store.addMeter({ unitId: unit.id, date, electricity: elec, water })
