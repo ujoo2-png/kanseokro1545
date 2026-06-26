@@ -15,6 +15,9 @@ CREATE POLICY anon_all_maintenance_categories ON maintenance_categories
   FOR ALL USING (true) WITH CHECK (true);
 
 -- UNIQUE constraint on name for ON CONFLICT support and deduplication
+DELETE FROM maintenance_categories a USING maintenance_categories b
+  WHERE a.name = b.name AND a.id > b.id;
+ALTER TABLE maintenance_categories DROP CONSTRAINT IF EXISTS maintenance_categories_name_key;
 ALTER TABLE maintenance_categories ADD CONSTRAINT maintenance_categories_name_key UNIQUE (name);
 
 -- 2. maintenance_records (유지보수 실시 기록)
@@ -39,6 +42,7 @@ CREATE TABLE IF NOT EXISTS maintenance_records (
 );
 
 ALTER TABLE maintenance_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_all_maintenance_records ON maintenance_records;
 CREATE POLICY anon_all_maintenance_records ON maintenance_records
   FOR ALL USING (true) WITH CHECK (true);
 
@@ -60,6 +64,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_all_notifications ON notifications;
 CREATE POLICY anon_all_notifications ON notifications
   FOR ALL USING (true) WITH CHECK (true);
 
