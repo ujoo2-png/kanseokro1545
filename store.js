@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.5'
+const APP_VERSION = 'v1.16.6'
 
 const Store = {
   version: APP_VERSION,

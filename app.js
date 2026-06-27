@@ -9,7 +9,7 @@
  * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
- * v1.16.5 (2026-06) 복지할인 총액 차감 방식 변경(전기요금 내 반영→별도 항목), 청구테이블 가로스크롤 복구
+ * v1.16.6 (2026-06) 청구 생성 복지할인 전기요금 직접차감 복원 + 명세서/상세 전기원가+할인 분리 표시
  * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
  * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
@@ -546,7 +546,7 @@ function renderBills() {
     const vacantClass = hasActive ? '' : 'row-vacant'
     const prepaidAmt = allBills.length ? Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0) : 0
     const wf = WELFARE[b.welfareType]
-    const wfDeduction = b.welfareDeduction || (wf ? wf.elecDiscount : 0)
+    const wfDeduction = b.welfareDeduction || 0
     const welfareTag = wfDeduction > 0 ? `<span style="font-weight:700;color:#d32f2f;font-size:11px">-${fmt(wfDeduction)}</span>` : '-'
     return `<tr class="${vacantClass}">
       ${_ck(b.id)}
@@ -1360,7 +1360,6 @@ function showModal(type, editData) {
       const wf = WELFARE[b.welfareType]
       const welfareName = wf ? wf.label : '해당없음'
       const wfDeduction = b.welfareDeduction || 0
-      const hasDiscount = wfDeduction > 0 || (wf && wf.waterDiscountPct > 0)
       const row = (label, value) => `<tr><td style="padding:4px 12px;border-bottom:1px solid #eee">${label}</td><td style="padding:4px 12px;border-bottom:1px solid #eee;text-align:right">${value}</td></tr>`
       const section = (title) => `<tr><td colspan="2" style="padding:6px 12px;background:#f5f5f5;font-weight:600;font-size:13px">${title}</td></tr>`
       const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
@@ -1375,12 +1374,11 @@ function showModal(type, editData) {
         ${row('수도 사용량', b.waterUsage ? fm(b.waterUsage) + ' m³' : '0 m³')}
         ${section('복지할인')}
         ${row('적용 대상', welfareName)}
-        ${hasDiscount ? (wfDeduction > 0 ? row('전기 할인', '-' + fmt(wfDeduction)) : '') : ''}
-        ${hasDiscount ? (wf && wf.waterDiscountPct > 0 ? row('수도 할인율', '-' + Math.round(wf.waterDiscountPct * 100) + '%') : '') : ''}
+        ${wfDeduction > 0 ? row('전기 할인', '-' + fmt(wfDeduction)) : ''}
         ${section('청구 금액')}
         ${row('월세', fmt(b.rent))}
         ${row('관리비', fmt(b.maintenanceFee))}
-        ${row('전기요금', fmt(b.electricity))}
+        ${row('전기요금', wfDeduction > 0 && b.elecCost ? fmt(b.elecCost) : fmt(b.electricity))}
         ${row('수도요금', fmt(b.water))}
         ${row('TV수신료', fmt(b.tvFee))}
         ${row('공용관리비', fmt(b.commonFee))}
@@ -1908,8 +1906,9 @@ function generateBills() {
     const wf = WELFARE[welfareId]
     const elecDiscount = wf ? wf.elecDiscount : 0
     const waterDiscountPct = wf ? wf.waterDiscountPct : 0
-    const fullElecCost = Math.round(elecCost)
-    const waterAfterDiscount = Math.round(waterCost * (1 - waterDiscountPct))
+    const elecAfter = Math.round(Math.max(0, elecCost - elecDiscount))
+    const waterAfter = Math.round(waterCost * (1 - waterDiscountPct))
+    const elecDeduction = Math.round(Math.min(elecCost, elecDiscount))
     const tvFee = 2500
     const commonFee = commonFeePerUnit
 
@@ -1924,9 +1923,7 @@ function generateBills() {
       }
     }
 
-    const subtotal = rent + maintenanceFee + fullElecCost + waterAfterDiscount + commonFee + tvFee + late
-    const welfareDeduction = Math.min(subtotal, elecDiscount)
-    const total = Math.max(0, subtotal - welfareDeduction)
+    const total = rent + maintenanceFee + elecAfter + waterAfter + commonFee + tvFee + late
     const billId = Store._nextId()
     Store._data.bills.push({
       id: billId,
@@ -1934,17 +1931,19 @@ function generateBills() {
       yearMonth: ym,
       rent,
       maintenanceFee,
-      electricity: fullElecCost,
-      water: waterAfterDiscount,
+      electricity: elecAfter,
+      water: waterAfter,
       commonFee,
       tvFee,
       lateFee: late,
-      welfareDeduction,
       total,
       status: 'unpaid',
       elecUsage,
       waterUsage,
       welfareType: welfareId,
+      welfareDeduction: elecDeduction,
+      elecCost: Math.round(elecCost),
+      waterCost: Math.round(waterCost),
     })
     const prepaidBalance = Store.getPrepaidBalance(u.id)
     if (prepaidBalance > 0) {
@@ -2139,7 +2138,7 @@ function previewBillPrint() {
         <tr><th>항목</th><th class="right">금액</th></tr>
         <tr><td>월세</td><td class="right">${fmt(b.rent)}</td></tr>
         <tr><td>관리비</td><td class="right">${fmt(b.maintenanceFee)}</td></tr>
-        <tr><td>전기요금</td><td class="right">${fmt(b.electricity)}</td></tr>
+        <tr><td>전기요금</td><td class="right">${wfDeduction > 0 && b.elecCost ? fmt(b.elecCost) : fmt(b.electricity)}</td></tr>
         <tr><td>수도요금</td><td class="right">${fmt(b.water)}</td></tr>
         <tr><td>공용관리비</td><td class="right">${fmt(b.commonFee)}</td></tr>
         <tr><td>TV수신료</td><td class="right">${fmt(b.tvFee)}</td></tr>
