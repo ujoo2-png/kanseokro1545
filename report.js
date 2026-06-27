@@ -5,10 +5,11 @@
 
 const Chart = {
   _opt(opts) {
+    const pad = opts.padding || { top: 20, right: 16, bottom: 32, left: 48 }
     return {
       width: opts.width || 400,
       height: opts.height || 240,
-      padding: opts.padding || { top: 20, right: 16, bottom: 32, left: 48 },
+      padding: pad, left: pad.left, right: pad.right, top: pad.top, bottom: pad.bottom,
       barColor: opts.barColor || '#2d5427',
       barColor2: opts.barColor2 || '#e8eaed',
       lineColor: opts.lineColor || '#2d5427',

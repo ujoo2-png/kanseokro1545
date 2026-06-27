@@ -1793,7 +1793,9 @@ function deleteNotice(id) {
 function generateBills() {
   const units = Store.getUnits()
   if (!units.length) return alert('등록된 세대가 없습니다.')
-  const ym = new Date().toISOString().slice(0, 7)
+  const defaultYm = new Date().toISOString().slice(0, 7)
+  const ym = prompt('청구 대상 년월을 입력하세요 (YYYY-MM):', defaultYm)
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return alert('년월 형식이 올바르지 않습니다. (예: 2026-06)')
   const billUnits = units.filter(u => u.elecBillingType !== 'individual' || u.waterBillingType !== 'individual')
   if (!billUnits.length) return alert('통합 청구 대상 세대가 없습니다.')
   const existing = Store.getBills().filter(b => b.yearMonth === ym)
@@ -1811,9 +1813,12 @@ function generateBills() {
     const rent = contract ? contract.rent : 0
     const maintenanceFee = contract ? contract.maintenanceFee : 0
     const welfareId = contract ? (contract.welfare || 'none') : 'none'
-    const meters = Store.getMeters().filter(m => m.unitId === u.id).sort((a, b) => String(a.date).localeCompare(String(b.date)))
-    const lastMeter = meters[meters.length - 1]
-    const prevMeter = meters[meters.length - 2]
+    const allMeters = Store.getMeters().filter(m => m.unitId === u.id).sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    const ymEnd = ym + '-31'
+    const inMonth = allMeters.filter(m => m.date <= ymEnd)
+    const lastMeter = inMonth[inMonth.length - 1] || allMeters[allMeters.length - 1]
+    const prevIdx = allMeters.indexOf(lastMeter) - 1
+    const prevMeter = prevIdx >= 0 ? allMeters[prevIdx] : null
     let elecCost = 0, waterCost = 0
     let elecUsage = 0, waterUsage = 0
     if (lastMeter && prevMeter) {
