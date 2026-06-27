@@ -250,6 +250,27 @@ function fmtShort(n) {
   return String(n)
 }
 
+/* canvas에 '데이터 없음' 메시지 */
+function showNoData(canvasId, message) {
+  const cvs = document.getElementById(canvasId)
+  if (!cvs) return
+  const dpr = window.devicePixelRatio || 1
+  const w = cvs.clientWidth || parseInt(cvs.getAttribute('width')) || 400
+  const h = cvs.clientHeight || parseInt(cvs.getAttribute('height')) || 200
+  cvs.width = w * dpr
+  cvs.height = h * dpr
+  cvs.style.width = w + 'px'
+  cvs.style.height = h + 'px'
+  const ctx = cvs.getContext('2d')
+  ctx.scale(dpr, dpr)
+  ctx.clearRect(0, 0, w, h)
+  ctx.fillStyle = '#bbb'
+  ctx.font = '14px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(message || '데이터가 없습니다.', w / 2, h / 2)
+}
+
 /* 리포트 페이지 렌더링 */
 function renderReports() {
   renderArrearsChart()
@@ -263,6 +284,11 @@ function renderReports() {
 /* 월별 미수 현황 (막대) */
 function renderArrearsChart() {
   const bills = Store.getBills()
+  if (!bills.length) {
+    showNoData('chart-arrears', '월별 미수금 데이터가 없습니다.')
+    document.getElementById('report-arrears-summary').innerHTML = ''
+    return
+  }
   const payments = Store.getPayments()
   const ymMap = {}
   bills.forEach(b => {
@@ -287,6 +313,10 @@ function renderArrearsChart() {
 /* 연체 추이 (라인) — 30일+ / 60일+ */
 function renderOverdueTrend() {
   const bills = Store.getBills()
+  if (!bills.length) {
+    showNoData('chart-overdue-trend', '연체 데이터가 없습니다.')
+    return
+  }
   const payments = Store.getPayments()
   const ymMap = {}
   bills.forEach(b => {
@@ -337,8 +367,7 @@ function renderUnitUsage() {
   })
   const sorted = Object.keys(unitMap).sort().slice(-12)
   if (!sorted.length) {
-    const el = document.getElementById('chart-unit-usage')
-    if (el) el.parentNode.innerHTML = '<div style="padding:40px;text-align:center;color:#888">사용량 데이터가 없습니다.</div>'
+    showNoData('chart-unit-usage', '사용량 데이터가 없습니다.')
     return
   }
   const labels = sorted.map(ym => ym.slice(2))
@@ -357,6 +386,10 @@ function renderUnitUsage() {
 /* 월별 수입/지출 추이 */
 function renderIncomeExpense() {
   const bills = Store.getBills()
+  if (!bills.length) {
+    showNoData('chart-income-expense', '청구/수납 데이터가 없습니다.')
+    return
+  }
   const payments = Store.getPayments()
   const ymMap = {}
   bills.forEach(b => {
@@ -397,8 +430,8 @@ function renderElecTrend() {
   })
   const sorted = Object.keys(ymMap).sort().slice(-12)
   if (!sorted.length) {
-    const el = document.getElementById('chart-elec-usage')
-    if (el) el.parentNode.innerHTML = '<div style="padding:20px;text-align:center;color:#888">전기 데이터가 없습니다.</div>'
+    showNoData('chart-elec-usage', '전기 사용량 데이터가 없습니다.')
+    showNoData('chart-elec-charge', '전기 요금 데이터가 없습니다.')
     return
   }
   const labels = sorted.map(ym => ym.slice(2))
@@ -424,8 +457,8 @@ function renderWaterTrend() {
   })
   const sorted = Object.keys(ymMap).sort().slice(-12)
   if (!sorted.length) {
-    const el = document.getElementById('chart-water-usage')
-    if (el) el.parentNode.innerHTML = '<div style="padding:20px;text-align:center;color:#888">수도 데이터가 없습니다.</div>'
+    showNoData('chart-water-usage', '수도 사용량 데이터가 없습니다.')
+    showNoData('chart-water-charge', '수도 요금 데이터가 없습니다.')
     return
   }
   const labels = sorted.map(ym => ym.slice(2))
