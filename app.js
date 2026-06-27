@@ -539,7 +539,7 @@ function renderPayments() {
     tbody.innerHTML = '<tr><td colspan="8">수납 내역이 없습니다.</td></tr>'
     return
   }
-  payments.sort((a, b) => b.date.localeCompare(a.date) || (b.id - a.id))
+  payments.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (b.id - a.id))
   tbody.innerHTML = payments.map(p => {
     const unit = Store.getUnits().find(u => u.id === p.unitId)
     const bill = Store.getBills().find(b => b.id === p.billId)
@@ -864,7 +864,7 @@ function renderRecent() {
   const all = [
     ...Store.getBills().map(b => ({ date: b.yearMonth + '-01', text: `청구서 생성 - 세대 ID ${b.unitId}`, status: b.status })),
     ...Store.getPayments().map(p => ({ date: p.date, text: `입금 등록 - ${fmt(p.amount)}`, status: 'paid' })),
-  ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10)
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 10)
   if (!all.length) {
     tbody.innerHTML = '<tr><td colspan="3">데이터가 없습니다.</td></tr>'
     return
@@ -1588,7 +1588,7 @@ function saveModal() {
       if (!Store.getContracts().find(c => c.unitId === data.unitId && c.status === 'active')) {
         return alert('계약중인 세대만 검침 입력이 가능합니다.')
       }
-      const prevMeters = Store.getMeters().filter(m => m.unitId === data.unitId && m.id !== state.editingId).sort((a, b) => a.date.localeCompare(b.date))
+      const prevMeters = Store.getMeters().filter(m => m.unitId === data.unitId && m.id !== state.editingId).sort((a, b) => String(a.date).localeCompare(String(b.date)))
       const lastMeter = prevMeters[prevMeters.length - 1]
       if (lastMeter) {
         if (data.electricity < lastMeter.electricity || data.water < lastMeter.water) {
@@ -1811,7 +1811,7 @@ function generateBills() {
     const rent = contract ? contract.rent : 0
     const maintenanceFee = contract ? contract.maintenanceFee : 0
     const welfareId = contract ? (contract.welfare || 'none') : 'none'
-    const meters = Store.getMeters().filter(m => m.unitId === u.id).sort((a, b) => a.date.localeCompare(b.date))
+    const meters = Store.getMeters().filter(m => m.unitId === u.id).sort((a, b) => String(a.date).localeCompare(String(b.date)))
     const lastMeter = meters[meters.length - 1]
     const prevMeter = meters[meters.length - 2]
     let elecCost = 0, waterCost = 0

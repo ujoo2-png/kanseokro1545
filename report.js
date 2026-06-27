@@ -356,10 +356,10 @@ function renderUnitUsage() {
   if (!sel) return
   const unitId = parseInt(sel.value)
   const meters = Store.getMeters().filter(m => !unitId || m.unitId === unitId)
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const unitMap = {}
   meters.forEach(m => {
-    const ym = m.date.slice(0, 7)
+    const ym = _myear(m)
     if (!unitMap[ym]) unitMap[ym] = { elec: 0, water: 0, count: 0 }
     unitMap[ym].elec += m.electricity || 0
     unitMap[ym].water += m.water || 0
@@ -414,16 +414,18 @@ function renderIncomeExpense() {
   })
 }
 
+function _myear(m) { return String(m.date || '').slice(0, 7) }
+
 /* 전기 사용량/요금 추이 */
 function renderElecTrend() {
   const sel = document.getElementById('report-elec-unit')
   if (!sel) return
   const unitId = parseInt(sel.value)
   const meters = Store.getMeters().filter(m => !unitId || m.unitId === unitId)
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const ymMap = {}
   meters.forEach(m => {
-    const ym = m.date.slice(0, 7)
+    const ym = _myear(m)
     if (!ymMap[ym]) ymMap[ym] = { usage: 0, count: 0 }
     ymMap[ym].usage += m.electricity || 0
     ymMap[ym].count++
@@ -447,10 +449,10 @@ function renderWaterTrend() {
   if (!sel) return
   const unitId = parseInt(sel.value)
   const meters = Store.getMeters().filter(m => !unitId || m.unitId === unitId)
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const ymMap = {}
   meters.forEach(m => {
-    const ym = m.date.slice(0, 7)
+    const ym = _myear(m)
     if (!ymMap[ym]) ymMap[ym] = { usage: 0, count: 0 }
     ymMap[ym].usage += m.water || 0
     ymMap[ym].count++

@@ -1,9 +1,9 @@
 /*
  * store.js — localStorage + Supabase 하이브리드 저장소
- * 간석로1545 관리자 시스템 v1.16.0
+ * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.0'
+const APP_VERSION = 'v1.16.1'
 
 const Store = {
   version: APP_VERSION,
@@ -79,6 +79,7 @@ const Store = {
     }
     this._ensureArrays()
     this._fixDuplicateIds()
+    this._migrateMeterDates()
     this.save()
     await this._loadFromSupabase()
     return this._data
@@ -137,6 +138,21 @@ const Store = {
         }
       }
     }
+  },
+
+  /** 검침 날짜가 number면 문자열(yyyy-mm-dd)로 변환 (엑셀 serial number 방어) */
+  _migrateMeterDates() {
+    const meters = this._data.meters
+    if (!meters) return
+    let changed = false
+    for (const m of meters) {
+      if (typeof m.date === 'number') {
+        const d = new Date((m.date - 25569) * 86400 * 1000)
+        m.date = isNaN(d.getTime()) ? String(m.date) : d.toISOString().slice(0, 10)
+        changed = true
+      }
+    }
+    if (changed) this.save()
   },
 
   /** 모든 데이터를 빈 배열로 초기화 */
