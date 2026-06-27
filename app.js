@@ -9,7 +9,7 @@
  * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
- * v1.16.6 (2026-06) 청구 생성 복지할인 전기요금 직접차감 복원 + 명세서/상세 전기원가+할인 분리 표시
+ * v1.16.7 (2026-06) 명세서/상세모달 구버전 호환 + 가로스크롤 테이블 min-width 1200px
  * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
  * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
@@ -1359,7 +1359,10 @@ function showModal(type, editData) {
       const unit = Store.getUnits().find(u => u.id === b.unitId)
       const wf = WELFARE[b.welfareType]
       const welfareName = wf ? wf.label : '해당없음'
-      const wfDeduction = b.welfareDeduction || 0
+      const hasWelfare = wf && wf.elecDiscount > 0
+      const wfActual = b.welfareDeduction || 0
+      const wfDisplay = wfActual || (hasWelfare ? wf.elecDiscount : 0)
+      const elecFull = b.elecCost || (hasWelfare ? b.electricity + wfDisplay : b.electricity)
       const row = (label, value) => `<tr><td style="padding:4px 12px;border-bottom:1px solid #eee">${label}</td><td style="padding:4px 12px;border-bottom:1px solid #eee;text-align:right">${value}</td></tr>`
       const section = (title) => `<tr><td colspan="2" style="padding:6px 12px;background:#f5f5f5;font-weight:600;font-size:13px">${title}</td></tr>`
       const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
@@ -1374,11 +1377,11 @@ function showModal(type, editData) {
         ${row('수도 사용량', b.waterUsage ? fm(b.waterUsage) + ' m³' : '0 m³')}
         ${section('복지할인')}
         ${row('적용 대상', welfareName)}
-        ${wfDeduction > 0 ? row('전기 할인', '-' + fmt(wfDeduction)) : ''}
+        ${wfDisplay > 0 ? row('전기 할인', '-' + fmt(wfDisplay)) : ''}
         ${section('청구 금액')}
         ${row('월세', fmt(b.rent))}
         ${row('관리비', fmt(b.maintenanceFee))}
-        ${row('전기요금', wfDeduction > 0 && b.elecCost ? fmt(b.elecCost) : fmt(b.electricity))}
+        ${row('전기요금', fmt(elecFull))}
         ${row('수도요금', fmt(b.water))}
         ${row('TV수신료', fmt(b.tvFee))}
         ${row('공용관리비', fmt(b.commonFee))}
@@ -2105,7 +2108,7 @@ function previewBillPrint() {
   .bill .header { text-align: center; margin-bottom: 1mm; }
   .bill .header .title1 { font-size: 14pt; font-weight: 900; letter-spacing: 1pt; }
   .bill .header .title2 { font-size: 10pt; margin-top: 0.3mm; color: #333; }
-  .bill .table-wrap { flex: 1; display: flex; flex-direction: column; }
+  .bill .table-wrap { flex: 1; display: flex; flex-direction: column; overflow-x: auto; }
   .bill table { width: 100%; border-collapse: collapse; font-size: 10pt; }
   .bill th, .bill td { padding: 2mm 1.2mm; border-bottom: 1px solid #bbb; text-align: left; }
   .bill th { background: #f0f0f0; font-weight: 700; }
@@ -2127,7 +2130,9 @@ function previewBillPrint() {
     const unitName = unit ? unit.name : '-'
     const wf = WELFARE[b.welfareType]
     const hasWelfare = wf && wf.elecDiscount > 0
-    const wfDeduction = b.welfareDeduction || 0
+    const wfActual = b.welfareDeduction || 0
+    const wfDisplay = wfActual || (hasWelfare ? wf.elecDiscount : 0)
+    const elecFull = b.elecCost || (hasWelfare ? b.electricity + wfDisplay : b.electricity)
     html += `<div class="bill">
       <div class="header">
         <div class="title1">(${esc(unitName)}) 전기·수도청구서</div>
@@ -2138,12 +2143,12 @@ function previewBillPrint() {
         <tr><th>항목</th><th class="right">금액</th></tr>
         <tr><td>월세</td><td class="right">${fmt(b.rent)}</td></tr>
         <tr><td>관리비</td><td class="right">${fmt(b.maintenanceFee)}</td></tr>
-        <tr><td>전기요금</td><td class="right">${wfDeduction > 0 && b.elecCost ? fmt(b.elecCost) : fmt(b.electricity)}</td></tr>
+        <tr><td>전기요금</td><td class="right">${fmt(elecFull)}</td></tr>
         <tr><td>수도요금</td><td class="right">${fmt(b.water)}</td></tr>
         <tr><td>공용관리비</td><td class="right">${fmt(b.commonFee)}</td></tr>
         <tr><td>TV수신료</td><td class="right">${fmt(b.tvFee)}</td></tr>
         <tr><td>연체료</td><td class="right">${fmt(b.lateFee)}</td></tr>
-        ${wfDeduction > 0 ? `<tr><td style="color:#d32f2f;font-size:9pt">복지할인</td><td class="right" style="color:#d32f2f;font-size:9pt">-${fmt(wfDeduction)}</td></tr>` : ''}
+        ${wfDisplay > 0 ? `<tr><td style="color:#d32f2f;font-size:9pt">복지할인</td><td class="right" style="color:#d32f2f;font-size:9pt">-${fmt(wfDisplay)}</td></tr>` : ''}
         <tr><td style="font-weight:700;font-size:9pt">합계</td><td style="font-weight:700;font-size:9pt;text-align:right">${fmt(b.total)}</td></tr>
         ${(() => {
           const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
