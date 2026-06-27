@@ -9,7 +9,7 @@
  * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
- * v1.16.8 (2026-06) 복지할인 WELFARE 값 수정 (장애인=16000, 차상위=8000, 다자녀=30%/16000한도) + 여름철 20000원
+ * v1.16.8 (2026-06) 복지할인 WELFARE 값 수정 + 청구월 기준 계약기간 포함 조회 (종료계약도 과거청구 복지 적용)
  * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
  * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
@@ -1889,8 +1889,13 @@ function generateBills() {
   if (commonInput === null) return
   const commonFeePerUnit = parseInt(commonInput) || 0
   const prevYm = getPrevYearMonth(ym)
+  const ymStart = ym + '-01'
   for (const u of billUnits) {
-    const contract = Store.getContracts().find(c => c.unitId === u.id && c.status === 'active')
+    const contract = Store.getContracts().find(c => {
+      if (c.unitId !== u.id) return false
+      if (c.status === 'active') return true
+      return c.contractStart && c.contractEnd && c.contractStart <= ym + '-31' && c.contractEnd >= ymStart
+    })
     const rent = contract ? contract.rent : 0
     const maintenanceFee = contract ? contract.maintenanceFee : 0
     const welfareId = contract ? (contract.welfare || 'none') : 'none'
