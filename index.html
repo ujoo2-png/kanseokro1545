@@ -1,3 +1,4 @@
+<!-- v1.16.5 청구테이블 가로스크롤(table-wrap) 복구, 체크박스+일괄삭제+정렬 전테이블 적용 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -335,14 +336,14 @@
                 <option value="">전체 기간</option>
               </select>
             </div>
-            <table>
+            <div class="table-wrap"><table class="table-dense">
               <thead>
                 <tr><th style="width:32px"><input type="checkbox" data-chk-all="billing-tbody" onchange="_chkAll('billing-tbody')"></th><th onclick="_sortBy('billing-tbody','name')" style="cursor:pointer">세대<span id="sort-billing-tbody-name"></span></th><th onclick="_sortBy('billing-tbody','ym')" style="cursor:pointer">청구월<span id="sort-billing-tbody-ym"></span></th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>TV수신료</th><th>공용</th><th>연체료</th><th>합계</th><th>복지할인</th><th>선수금차감</th><th>납부상태</th><th>관리</th></tr>
               </thead>
               <tbody id="billing-tbody">
                 <tr><td colspan="15">청구 내역이 없습니다.</td></tr>
               </tbody>
-            </table>
+            </table></div>
           </div>
         </div>
 

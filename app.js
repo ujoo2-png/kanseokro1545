@@ -9,6 +9,7 @@
  * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
+ * v1.16.5 (2026-06) 복지할인 총액 차감 방식 변경(전기요금 내 반영→별도 항목), 청구테이블 가로스크롤 복구
  * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
  * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
@@ -545,7 +546,8 @@ function renderBills() {
     const vacantClass = hasActive ? '' : 'row-vacant'
     const prepaidAmt = allBills.length ? Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0) : 0
     const wf = WELFARE[b.welfareType]
-    const welfareTag = wf && (wf.elecDiscount > 0 || wf.waterDiscountPct > 0) ? `<span style="font-weight:700;color:#d32f2f;font-size:11px">${wf.label} (-${fmt(wf.elecDiscount)})</span>` : '-'
+    const wfDeduction = b.welfareDeduction || (wf ? wf.elecDiscount : 0)
+    const welfareTag = wfDeduction > 0 ? `<span style="font-weight:700;color:#d32f2f;font-size:11px">-${fmt(wfDeduction)}</span>` : '-'
     return `<tr class="${vacantClass}">
       ${_ck(b.id)}
       <td><a href="#" onclick="showBillDetail(${b.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
@@ -1357,9 +1359,8 @@ function showModal(type, editData) {
       const unit = Store.getUnits().find(u => u.id === b.unitId)
       const wf = WELFARE[b.welfareType]
       const welfareName = wf ? wf.label : '해당없음'
-      const elecDiscount = wf ? wf.elecDiscount : 0
-      const waterDiscountPct = wf ? wf.waterDiscountPct : 0
-      const hasDiscount = elecDiscount > 0 || waterDiscountPct > 0
+      const wfDeduction = b.welfareDeduction || 0
+      const hasDiscount = wfDeduction > 0 || (wf && wf.waterDiscountPct > 0)
       const row = (label, value) => `<tr><td style="padding:4px 12px;border-bottom:1px solid #eee">${label}</td><td style="padding:4px 12px;border-bottom:1px solid #eee;text-align:right">${value}</td></tr>`
       const section = (title) => `<tr><td colspan="2" style="padding:6px 12px;background:#f5f5f5;font-weight:600;font-size:13px">${title}</td></tr>`
       const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
@@ -1374,8 +1375,8 @@ function showModal(type, editData) {
         ${row('수도 사용량', b.waterUsage ? fm(b.waterUsage) + ' m³' : '0 m³')}
         ${section('복지할인')}
         ${row('적용 대상', welfareName)}
-        ${hasDiscount ? (elecDiscount > 0 ? row('전기 할인', '-' + fmt(elecDiscount)) : '') : ''}
-        ${hasDiscount ? (waterDiscountPct > 0 ? row('수도 할인율', '-' + Math.round(waterDiscountPct * 100) + '%') : '') : ''}
+        ${hasDiscount ? (wfDeduction > 0 ? row('전기 할인', '-' + fmt(wfDeduction)) : '') : ''}
+        ${hasDiscount ? (wf && wf.waterDiscountPct > 0 ? row('수도 할인율', '-' + Math.round(wf.waterDiscountPct * 100) + '%') : '') : ''}
         ${section('청구 금액')}
         ${row('월세', fmt(b.rent))}
         ${row('관리비', fmt(b.maintenanceFee))}
@@ -1907,8 +1908,8 @@ function generateBills() {
     const wf = WELFARE[welfareId]
     const elecDiscount = wf ? wf.elecDiscount : 0
     const waterDiscountPct = wf ? wf.waterDiscountPct : 0
-    const elecAfter = Math.max(0, elecCost - elecDiscount)
-    const waterAfter = waterCost * (1 - waterDiscountPct)
+    const fullElecCost = Math.round(elecCost)
+    const waterAfterDiscount = Math.round(waterCost * (1 - waterDiscountPct))
     const tvFee = 2500
     const commonFee = commonFeePerUnit
 
@@ -1923,7 +1924,9 @@ function generateBills() {
       }
     }
 
-    const total = rent + maintenanceFee + Math.round(elecAfter) + Math.round(waterAfter) + commonFee + tvFee + late
+    const subtotal = rent + maintenanceFee + fullElecCost + waterAfterDiscount + commonFee + tvFee + late
+    const welfareDeduction = Math.min(subtotal, elecDiscount)
+    const total = Math.max(0, subtotal - welfareDeduction)
     const billId = Store._nextId()
     Store._data.bills.push({
       id: billId,
@@ -1931,11 +1934,12 @@ function generateBills() {
       yearMonth: ym,
       rent,
       maintenanceFee,
-      electricity: Math.round(elecAfter),
-      water: Math.round(waterAfter),
+      electricity: fullElecCost,
+      water: waterAfterDiscount,
       commonFee,
       tvFee,
       lateFee: late,
+      welfareDeduction,
       total,
       status: 'unpaid',
       elecUsage,
@@ -2123,10 +2127,8 @@ function previewBillPrint() {
     const dispYm = b.yearMonth.replace('-', '-') + '월분'
     const unitName = unit ? unit.name : '-'
     const wf = WELFARE[b.welfareType]
-    const hasElecDiscount = wf && wf.elecDiscount > 0
-    const hasWaterDiscount = wf && wf.waterDiscountPct > 0
-    const waterDiscountAmt = hasWaterDiscount ? Math.round(b.water * wf.waterDiscountPct / (1 - wf.waterDiscountPct)) : 0
-    const totalDiscount = (hasElecDiscount ? wf.elecDiscount : 0) + waterDiscountAmt
+    const hasWelfare = wf && wf.elecDiscount > 0
+    const wfDeduction = b.welfareDeduction || 0
     html += `<div class="bill">
       <div class="header">
         <div class="title1">(${esc(unitName)}) 전기·수도청구서</div>
@@ -2142,7 +2144,7 @@ function previewBillPrint() {
         <tr><td>공용관리비</td><td class="right">${fmt(b.commonFee)}</td></tr>
         <tr><td>TV수신료</td><td class="right">${fmt(b.tvFee)}</td></tr>
         <tr><td>연체료</td><td class="right">${fmt(b.lateFee)}</td></tr>
-        ${hasElecDiscount || hasWaterDiscount ? `<tr><td style="color:#d32f2f;font-size:9pt">복지할인</td><td class="right" style="color:#d32f2f;font-size:9pt">-${fmt(totalDiscount)}</td></tr>` : ''}
+        ${wfDeduction > 0 ? `<tr><td style="color:#d32f2f;font-size:9pt">복지할인</td><td class="right" style="color:#d32f2f;font-size:9pt">-${fmt(wfDeduction)}</td></tr>` : ''}
         <tr><td style="font-weight:700;font-size:9pt">합계</td><td style="font-weight:700;font-size:9pt;text-align:right">${fmt(b.total)}</td></tr>
         ${(() => {
           const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
