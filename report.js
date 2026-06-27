@@ -1,6 +1,6 @@
 /*
  * report.js — 리포트 및 차트 엔진
- * 간석로1545 관리자 시스템 v1.15.9
+ * 간석로1545 관리자 시스템 v1.16.0
  */
 
 const Chart = {
@@ -256,6 +256,8 @@ function renderReports() {
   renderOverdueTrend()
   renderUnitUsage()
   renderIncomeExpense()
+  renderElecTrend()
+  renderWaterTrend()
 }
 
 /* 월별 미수 현황 (막대) */
@@ -379,14 +381,70 @@ function renderIncomeExpense() {
   })
 }
 
+/* 전기 사용량/요금 추이 */
+function renderElecTrend() {
+  const sel = document.getElementById('report-elec-unit')
+  if (!sel) return
+  const unitId = parseInt(sel.value)
+  const meters = Store.getMeters().filter(m => !unitId || m.unitId === unitId)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  const ymMap = {}
+  meters.forEach(m => {
+    const ym = m.date.slice(0, 7)
+    if (!ymMap[ym]) ymMap[ym] = { usage: 0, count: 0 }
+    ymMap[ym].usage += m.electricity || 0
+    ymMap[ym].count++
+  })
+  const sorted = Object.keys(ymMap).sort().slice(-12)
+  if (!sorted.length) {
+    const el = document.getElementById('chart-elec-usage')
+    if (el) el.parentNode.innerHTML = '<div style="padding:20px;text-align:center;color:#888">전기 데이터가 없습니다.</div>'
+    return
+  }
+  const labels = sorted.map(ym => ym.slice(2))
+  const usage = sorted.map(ym => Math.round(ymMap[ym].usage / ymMap[ym].count))
+  const charge = usage.map(v => calcElec(v))
+  Chart.bar('chart-elec-usage', labels, usage, { width: 500, height: 200, barColor: '#2d5427', padding: { top: 16, right: 16, bottom: 28, left: 44 } })
+  Chart.bar('chart-elec-charge', labels, charge, { width: 500, height: 200, barColor: '#e65100', padding: { top: 16, right: 16, bottom: 28, left: 44 } })
+}
+
+/* 수도 사용량/요금 추이 */
+function renderWaterTrend() {
+  const sel = document.getElementById('report-water-unit')
+  if (!sel) return
+  const unitId = parseInt(sel.value)
+  const meters = Store.getMeters().filter(m => !unitId || m.unitId === unitId)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  const ymMap = {}
+  meters.forEach(m => {
+    const ym = m.date.slice(0, 7)
+    if (!ymMap[ym]) ymMap[ym] = { usage: 0, count: 0 }
+    ymMap[ym].usage += m.water || 0
+    ymMap[ym].count++
+  })
+  const sorted = Object.keys(ymMap).sort().slice(-12)
+  if (!sorted.length) {
+    const el = document.getElementById('chart-water-usage')
+    if (el) el.parentNode.innerHTML = '<div style="padding:20px;text-align:center;color:#888">수도 데이터가 없습니다.</div>'
+    return
+  }
+  const labels = sorted.map(ym => ym.slice(2))
+  const usage = sorted.map(ym => Math.round((ymMap[ym].usage / ymMap[ym].count) * 10) / 10)
+  const charge = usage.map(v => calcWater(v))
+  Chart.bar('chart-water-usage', labels, usage, { width: 500, height: 200, barColor: '#1565c0', padding: { top: 16, right: 16, bottom: 28, left: 44 } })
+  Chart.bar('chart-water-charge', labels, charge, { width: 500, height: 200, barColor: '#e65100', padding: { top: 16, right: 16, bottom: 28, left: 44 } })
+}
+
 /* 리포트 페이지 초기화 */
 function initReportPage() {
-  const sel = document.getElementById('report-unit-select')
-  if (!sel) return
-  const current = sel.value
-  sel.innerHTML = '<option value="">전체 세대</option>'
-  Store.getUnits().forEach(u => {
-    sel.innerHTML += `<option value="${u.id}" ${u.id === parseInt(current) ? 'selected' : ''}>${esc(u.name)}</option>`
+  ;['report-unit-select', 'report-elec-unit', 'report-water-unit'].forEach(id => {
+    const sel = document.getElementById(id)
+    if (!sel) return
+    const current = sel.value
+    sel.innerHTML = '<option value="">전체 세대</option>'
+    Store.getUnits().forEach(u => {
+      sel.innerHTML += `<option value="${u.id}" ${u.id === parseInt(current) ? 'selected' : ''}>${esc(u.name)}</option>`
+    })
+    if (current) sel.value = current
   })
-  if (current) sel.value = current
 }

@@ -137,7 +137,7 @@
               <div class="card">
                 <div class="card-header">
                   <h3>세대별 사용량</h3>
-                  <select id="report-unit-select" onchange="renderUnitUsage()" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none">
+                  <select id="report-unit-select" onchange="renderUnitUsage()" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none;flex:1">
                     <option value="">전체 세대</option>
                   </select>
                 </div>
@@ -146,6 +146,28 @@
               <div class="card">
                 <h3>월별 청구/수납 추이</h3>
                 <canvas id="chart-income-expense" width="500" height="240" style="width:100%;height:240px"></canvas>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 16px 16px">
+              <div class="card">
+                <h3>전기 사용량/요금 추이</h3>
+                <div style="display:flex;gap:4px;padding:0 16px 4px">
+                  <select id="report-elec-unit" onchange="renderElecTrend()" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none">
+                    <option value="">전체 세대</option>
+                  </select>
+                </div>
+                <canvas id="chart-elec-usage" width="500" height="200" style="width:100%;height:200px"></canvas>
+                <canvas id="chart-elec-charge" width="500" height="200" style="width:100%;height:200px;margin-top:4px"></canvas>
+              </div>
+              <div class="card">
+                <h3>수도 사용량/요금 추이</h3>
+                <div style="display:flex;gap:4px;padding:0 16px 4px">
+                  <select id="report-water-unit" onchange="renderWaterTrend()" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none">
+                    <option value="">전체 세대</option>
+                  </select>
+                </div>
+                <canvas id="chart-water-usage" width="500" height="200" style="width:100%;height:200px"></canvas>
+                <canvas id="chart-water-charge" width="500" height="200" style="width:100%;height:200px;margin-top:4px"></canvas>
               </div>
             </div>
           </div>
@@ -305,10 +327,10 @@
             </div>
             <table>
               <thead>
-                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>공용</th><th>TV수신료</th><th>연체료</th><th>합계</th><th>선수금차감</th><th>납부상태</th><th>관리</th></tr>
+                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>TV수신료</th><th>공용</th><th>연체료</th><th>합계</th><th>복지할인</th><th>선수금차감</th><th>납부상태</th><th>관리</th></tr>
               </thead>
               <tbody id="billing-tbody">
-                <tr><td colspan="13">청구 내역이 없습니다.</td></tr>
+                <tr><td colspan="14">청구 내역이 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -506,6 +528,6 @@
   <script src="app.js" defer></script>
   <script src="report.js" defer></script>
   <script src="excel.js" defer></script>
-  <script>document.getElementById('version-label').textContent += ' ' + (window.Store?.version || 'v1.15.9')</script>
+  <script>document.addEventListener('DOMContentLoaded',function(){var e=document.getElementById('version-label');if(e&&window.Store)e.textContent+=' '+Store.version})</script>
 </body>
 </html>

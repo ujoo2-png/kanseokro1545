@@ -1,6 +1,6 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.15.9
+ * 간석로1545 관리자 시스템 v1.16.0
  *
  * 히스토리
  * vv1.15.5 (2026-06) 모바일 URL 기본값 Vercel로 변경
@@ -446,6 +446,9 @@ function populateBillFilter() {
     Store.getBills().forEach(b => {
       if (b.yearMonth) years[b.yearMonth.slice(0, 4)] = true
     })
+    const thisYm = new Date().toISOString().slice(0, 7)
+    const thisYear = thisYm.slice(0, 4)
+    if (!years[thisYear]) years[thisYear] = true
     ymSel.innerHTML = '<option value="">전체 기간</option>'
     Object.keys(years).sort().reverse().forEach(y => {
       for (let m = 12; m >= 1; m--) {
@@ -454,6 +457,7 @@ function populateBillFilter() {
       }
     })
     if (current) ymSel.value = current
+    else ymSel.value = thisYm
   }
   if (unitSel) {
     const current = unitSel.value
@@ -487,7 +491,7 @@ function renderBills() {
   if (filterStatus) bills = bills.filter(b => b.status === filterStatus)
   bills.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth) || (a.id - b.id))
   if (!bills.length) {
-    tbody.innerHTML = `<tr><td colspan="13">청구 내역이 없습니다. (필터: ${filterYm || '전체'} / ${matchedUnitName || '전체'} / ${filterStatus || '전체'})</td></tr>`
+    tbody.innerHTML = `<tr><td colspan="14">청구 내역이 없습니다. (필터: ${filterYm || '전체'} / ${matchedUnitName || '전체'} / ${filterStatus || '전체'})</td></tr>`
     return
   }
   tbody.innerHTML = bills.map(b => {
@@ -498,6 +502,8 @@ function renderBills() {
     const hasActive = !!Store.getContracts().find(c => c.unitId === b.unitId && c.status === 'active')
     const vacantClass = hasActive ? '' : 'row-vacant'
     const prepaidAmt = allBills.length ? Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0) : 0
+    const wf = WELFARE[b.welfareType]
+    const welfareTag = wf ? '<span style="font-weight:700;color:#d32f2f;font-size:12px">복지할인</span>' : '-'
     return `<tr class="${vacantClass}">
       <td><a href="#" onclick="showBillDetail(${b.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${b.yearMonth}</td>
@@ -505,10 +511,11 @@ function renderBills() {
       <td>${fmt(b.maintenanceFee)}</td>
       <td>${fmt(b.electricity)} ${usageTag(b.elecUsage, 'kWh')}</td>
       <td>${fmt(b.water)} ${usageTag(b.waterUsage, 'm³')}</td>
-      <td>${fmt(b.commonFee)}</td>
       <td>${fmt(b.tvFee)}</td>
+      <td>${fmt(b.commonFee)}</td>
       <td>${fmt(b.lateFee)}</td>
       <td>${fmt(b.total)}</td>
+      <td>${welfareTag}</td>
       <td>${prepaidAmt > 0 ? fmt(prepaidAmt) : '-'}</td>
       <td><span class="badge ${badge}">${label}</span></td>
       <td><button class="btn btn-secondary" onclick="showBillDetail(${b.id})" style="padding:4px 8px;font-size:12px">상세</button></td>
@@ -1299,8 +1306,8 @@ function showModal(type, editData) {
         ${row('관리비', fmt(b.maintenanceFee))}
         ${row('전기요금', fmt(b.electricity))}
         ${row('수도요금', fmt(b.water))}
-        ${row('공용관리비', fmt(b.commonFee))}
         ${row('TV수신료', fmt(b.tvFee))}
+        ${row('공용관리비', fmt(b.commonFee))}
         ${row('연체료', fmt(b.lateFee))}
         ${row('<strong>합계</strong>', '<strong>' + fmt(b.total) + '</strong>')}
         ${prepaidAmt > 0 ? row('선수금 차감', '<span style="color:#388e3c">-' + fmt(prepaidAmt) + '</span>') : ''}

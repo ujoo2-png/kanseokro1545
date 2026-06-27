@@ -1,9 +1,9 @@
 /*
  * store.js — localStorage + Supabase 하이브리드 저장소
- * 간석로1545 관리자 시스템 v1.15.9
+ * 간석로1545 관리자 시스템 v1.16.0
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.15.9'
+const APP_VERSION = 'v1.16.0'
 
 const Store = {
   version: APP_VERSION,
