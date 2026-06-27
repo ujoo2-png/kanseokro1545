@@ -102,7 +102,7 @@ const Store = {
           const merged = [...local]
           for (const r of remote) {
             const idx = merged.findIndex(x => x.id === r.id)
-            if (idx > -1) merged[idx] = r
+            if (idx > -1) merged[idx] = { ...r, ...merged[idx] }
             else merged.push(r)
           }
           this._data[table] = merged

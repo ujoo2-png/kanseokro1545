@@ -133,6 +133,8 @@ function restorePageState() {
 /** 앱 초기화 — Store 로드 → 네비게이션/모달/사이드바 설정 → 전체 렌더 + 통계 갱신 */
 async function init() {
   await Store.init()
+  const vl = document.getElementById('version-label')
+  if (vl) vl.textContent = '관리자 시스템 ' + Store.version
   if (typeof ensureAdmin === 'function') ensureAdmin()
   setupNavigation()
   setupDraggableModal()
