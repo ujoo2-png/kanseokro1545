@@ -9,7 +9,7 @@
  * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
- * v1.16.7 (2026-06) 명세서/상세모달 전기+수도 할인 분리 표시 + 구버전 호환 + waterDeduction 필드
+ * v1.16.8 (2026-06) 복지할인 WELFARE 값 수정 (장애인=16000, 차상위=8000, 다자녀=30%/16000한도) + 여름철 20000원
  * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
  * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
@@ -28,10 +28,10 @@ let state = { currentModal: null, editingId: null }
 
 const WELFARE = {
   none: { elecDiscount: 0, waterDiscountPct: 0, label: '해당없음' },
-  basic: { elecDiscount: 16000, waterDiscountPct: 0.3, label: '기초생활수급자' },
-  next: { elecDiscount: 10000, waterDiscountPct: 0.2, label: '차상위계층' },
-  disabled: { elecDiscount: 8000, waterDiscountPct: 0, label: '장애인' },
-  multi: { elecDiscount: 8000, waterDiscountPct: 0, label: '다자녀' },
+  basic: { elecDiscount: 16000, elecSummer: 20000, waterDiscountPct: 0.3, label: '기초생활수급자' },
+  next: { elecDiscount: 8000, waterDiscountPct: 0.2, label: '차상위계층' },
+  disabled: { elecDiscount: 16000, elecSummer: 20000, waterDiscountPct: 0, label: '장애인' },
+  multi: { elecDiscountPct: 0.3, elecDiscountMax: 16000, waterDiscountPct: 0, label: '다자녀' },
 }
 
 /**
@@ -89,7 +89,9 @@ function calcWater(m3) {
 
 /** 복지할인 대상의 한글 라벨 반환 */
 function welfareLabel(w) {
-  return WELFARE[w] ? WELFARE[w].label : '해당없음'
+  const e = WELFARE[w]
+  if (!e) return '해당없음'
+  return e.label + (e.elecDiscountPct ? ' (전기 ' + (e.elecDiscountPct * 100) + '%, ' + fmt(e.elecDiscountMax) + '원 한도)' : '')
 }
 
 /**
@@ -1359,10 +1361,10 @@ function showModal(type, editData) {
       const unit = Store.getUnits().find(u => u.id === b.unitId)
       const wf = WELFARE[b.welfareType]
       const welfareName = wf ? wf.label : '해당없음'
-      const hasWelfare = wf && wf.elecDiscount > 0
+      const hasWelfare = wf && (wf.elecDiscount > 0 || wf.elecDiscountPct > 0)
       const hasWaterDiscount = wf && wf.waterDiscountPct > 0
       const wfActual = b.welfareDeduction || 0
-      const wfDisplay = wfActual || (hasWelfare ? wf.elecDiscount : 0)
+      const wfDisplay = wfActual || (hasWelfare ? (wf.elecDiscount || wf.elecDiscountMax || 0) : 0)
       const elecFull = b.elecCost || (hasWelfare ? b.electricity + wfDisplay : b.electricity)
       const waterFull = b.waterCost || (hasWaterDiscount ? Math.round(b.water / (1 - wf.waterDiscountPct)) : b.water)
       const waterDeduct = b.waterDeduction || (hasWaterDiscount ? Math.round(waterFull * wf.waterDiscountPct) : 0)
@@ -1911,8 +1913,18 @@ function generateBills() {
       }
     }
     const wf = WELFARE[welfareId]
-    const elecDiscount = wf ? wf.elecDiscount : 0
-    const waterDiscountPct = wf ? wf.waterDiscountPct : 0
+    const month = parseInt(ym.split('-')[1])
+    let elecDiscount = 0, waterDiscountPct = 0
+    if (wf) {
+      waterDiscountPct = wf.waterDiscountPct || 0
+      if (wf.elecDiscountPct) {
+        elecDiscount = Math.min(Math.round(elecCost * wf.elecDiscountPct), wf.elecDiscountMax || Infinity)
+      } else {
+        let base = wf.elecDiscount || 0
+        if (wf.elecSummer && (month === 7 || month === 8)) base = wf.elecSummer
+        elecDiscount = base
+      }
+    }
     const elecAfter = Math.round(Math.max(0, elecCost - elecDiscount))
     const waterAfter = Math.round(waterCost * (1 - waterDiscountPct))
     const elecDeduction = Math.round(Math.min(elecCost, elecDiscount))
@@ -2135,10 +2147,10 @@ function previewBillPrint() {
     const dispYm = b.yearMonth.replace('-', '-') + '월분'
     const unitName = unit ? unit.name : '-'
     const wf = WELFARE[b.welfareType]
-    const hasWelfare = wf && wf.elecDiscount > 0
+    const hasWelfare = wf && (wf.elecDiscount > 0 || wf.elecDiscountPct > 0)
     const hasWaterDiscount = wf && wf.waterDiscountPct > 0
     const wfActual = b.welfareDeduction || 0
-    const wfDisplay = wfActual || (hasWelfare ? wf.elecDiscount : 0)
+    const wfDisplay = wfActual || (hasWelfare ? (wf.elecDiscount || wf.elecDiscountMax || 0) : 0)
     const waterDeduct = b.waterDeduction || (hasWaterDiscount ? Math.round((b.waterCost || Math.round(b.water / (1 - wf.waterDiscountPct))) * wf.waterDiscountPct) : 0)
     const elecFull = b.elecCost || (hasWelfare ? b.electricity + wfDisplay : b.electricity)
     html += `<div class="bill">
