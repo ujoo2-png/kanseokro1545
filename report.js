@@ -439,7 +439,7 @@ function renderElecTrend() {
   }
   const labels = sorted.map(ym => ym.slice(2))
   const usage = sorted.map(ym => Math.round(ymMap[ym].usage / ymMap[ym].count))
-  const charge = usage.map(v => calcElec(v))
+  const charge = sorted.map((ym, i) => calcElec(usage[i], parseInt(ym.split('-')[1])))
   Chart.bar('chart-elec-usage', labels, usage, { width: 500, height: 200, barColor: '#2d5427', padding: { top: 16, right: 16, bottom: 28, left: 44 } })
   Chart.bar('chart-elec-charge', labels, charge, { width: 500, height: 200, barColor: '#e65100', padding: { top: 16, right: 16, bottom: 28, left: 44 } })
 }

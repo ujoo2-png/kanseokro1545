@@ -196,12 +196,15 @@
               <span class="mnt-filter-btn" data-mnt="completed" onclick="setMntFilter('completed')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">완료</span>
               <span class="mnt-filter-btn" data-mnt="cancelled" onclick="setMntFilter('cancelled')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">취소</span>
             </div>
+            <div style="padding:4px 20px;display:flex;gap:8px">
+              <button class="btn btn-secondary" onclick="_delSel('mnt-tbody','유지보수')" style="font-size:12px;padding:4px 10px">선택삭제</button>
+            </div>
             <div class="table-wrap"><table class="table-dense">
               <thead>
-                <tr><th>No.</th><th>세대</th><th>항목</th><th>제목</th><th>상태</th><th>우선순위</th><th>비용</th><th>업체</th><th>예정일</th><th>완료일</th><th>관리</th></tr>
+                <tr><th style="width:32px"><input type="checkbox" data-chk-all="mnt-tbody" onchange="_chkAll('mnt-tbody')"></th><th>No.</th><th>세대</th><th>항목</th><th>제목</th><th>상태</th><th>우선순위</th><th>비용</th><th>업체</th><th>예정일</th><th>완료일</th><th>관리</th></tr>
               </thead>
               <tbody id="mnt-tbody">
-                <tr><td colspan="11">유지보수 내역이 없습니다.</td></tr>
+                <tr><td colspan="12">유지보수 내역이 없습니다.</td></tr>
               </tbody>
             </table></div>
           </div>
@@ -224,10 +227,13 @@
                   <button class="btn btn-primary" onclick="showModal('building')">+ 건물 추가</button>
                 </div>
               </div>
+              <div style="padding:8px 20px 0;display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="_delSel('building-tbody','건물')" style="font-size:12px;padding:4px 10px">선택삭제</button>
+              </div>
               <table>
-                <thead><tr><th>건물명</th><th>주소</th><th>관리자</th><th>연락처</th><th>계좌정보</th><th>관리</th></tr></thead>
+                <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="building-tbody" onchange="_chkAll('building-tbody')"></th><th>건물명</th><th>주소</th><th>관리자</th><th>연락처</th><th>계좌정보</th><th>관리</th></tr></thead>
                 <tbody id="building-tbody">
-                  <tr><td colspan="6">등록된 건물이 없습니다.</td></tr>
+                  <tr><td colspan="7">등록된 건물이 없습니다.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -239,14 +245,15 @@
                 <h3>세대 목록</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="unit-search" placeholder="세대명 / 세입자 검색..." oninput="renderUnits()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-secondary" onclick="_delSel('unit-tbody','세대')" style="font-size:12px">선택삭제</button>
                   <button class="btn btn-secondary" onclick="exportUnits()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-primary" onclick="showModal('unit')">+ 세대 추가</button>
                 </div>
               </div>
               <table>
-                <thead><tr><th style="width:40px">No</th><th>세대</th><th>건물</th><th>평수</th><th>전기/수도</th><th>냉난방기</th><th>TV</th><th>냉장고</th><th>세탁기</th><th>TV거실장</th><th>침대</th><th>옷장</th><th>계약</th><th>관리</th></tr></thead>
+                <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="unit-tbody" onchange="_chkAll('unit-tbody')"></th><th style="width:40px">No</th><th onclick="_sortBy('unit-tbody','name')" style="cursor:pointer">세대<span id="sort-unit-tbody-name"></span></th><th>건물</th><th>평수</th><th>전기/수도</th><th>냉난방기</th><th>TV</th><th>냉장고</th><th>세탁기</th><th>TV거실장</th><th>침대</th><th>옷장</th><th>계약</th><th>관리</th></tr></thead>
                 <tbody id="unit-tbody">
-                  <tr><td colspan="14">등록된 세대가 없습니다.</td></tr>
+                  <tr><td colspan="15">등록된 세대가 없습니다.</td></tr>
                 </tbody>
               </table>
               <div id="unit-pagination" style="display:flex;justify-content:center;align-items:center;gap:6px;padding:12px 0;font-size:13px"></div>
@@ -265,13 +272,14 @@
                     <span class="contract-filter-btn" data-filter="ended" onclick="setContractFilter('ended')" style="cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;background:#e8eaed;color:#555">종료</span>
                   </div>
                   <button class="btn btn-secondary" onclick="exportContracts()" style="font-size:12px">엑셀</button>
+                  <button class="btn btn-secondary" onclick="_delSel('contract-tbody','계약')" style="font-size:12px">선택삭제</button>
                   <button class="btn btn-primary" onclick="showModal('contract')">+ 계약 추가</button>
                 </div>
               </div>
               <div class="table-wrap"><table class="table-dense">
-                <thead><tr><th>세대</th><th>세입자</th><th>연락처</th><th>비상연락처</th><th>비상연락처 관계</th><th>부동산명</th><th>계약기간</th><th>월세</th><th>관리비</th><th>보증금</th><th>은행명</th><th>계좌번호</th><th>입금주</th><th>복지할인</th><th>파일</th><th>상태</th><th>관리</th></tr></thead>
+                <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="contract-tbody" onchange="_chkAll('contract-tbody')"></th><th onclick="_sortBy('contract-tbody','name')" style="cursor:pointer">세대<span id="sort-contract-tbody-name"></span></th><th>세입자</th><th>연락처</th><th>비상연락처</th><th>비상연락처 관계</th><th>부동산명</th><th>계약기간</th><th>월세</th><th>관리비</th><th>보증금</th><th>은행명</th><th>계좌번호</th><th>입금주</th><th>복지할인</th><th>파일</th><th>상태</th><th>관리</th></tr></thead>
                 <tbody id="contract-tbody">
-                  <tr><td colspan="17">등록된 계약이 없습니다.</td></tr>
+                  <tr><td colspan="18">등록된 계약이 없습니다.</td></tr>
                 </tbody>
               </table></div>
             </div>
@@ -287,15 +295,16 @@
                   <button class="btn btn-secondary" onclick="exportMeters()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-secondary" onclick="importMeters()" style="font-size:12px">가져오기</button>
                   <button class="btn btn-secondary" onclick="checkMeterIntegrity()" style="font-size:12px">정합성 검토</button>
+                  <button class="btn btn-secondary" onclick="_delSel('meter-tbody','검침')" style="font-size:12px">선택삭제</button>
                   <button class="btn btn-primary" onclick="showModal('meter')">+ 검침 입력</button>
                 </div>
               </div>
             <table>
               <thead>
-                <tr><th>세대</th><th>검침일</th><th>전기(kWh)</th><th>수도(m³)</th><th>관리</th></tr>
+                <tr><th style="width:32px"><input type="checkbox" data-chk-all="meter-tbody" onchange="_chkAll('meter-tbody')"></th><th onclick="_sortBy('meter-tbody','name')" style="cursor:pointer">세대<span id="sort-meter-tbody-name"></span></th><th onclick="_sortBy('meter-tbody','date')" style="cursor:pointer">검침일<span id="sort-meter-tbody-date"></span></th><th>전기(kWh)</th><th>수도(m³)</th><th>관리</th></tr>
               </thead>
               <tbody id="meter-tbody">
-                <tr><td colspan="5">검침 데이터가 없습니다.</td></tr>
+                <tr><td colspan="6">검침 데이터가 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -309,6 +318,7 @@
                   <button class="btn btn-secondary" onclick="exportBills()" style="font-size:12px">엑셀</button>
                   <button class="btn btn-secondary" onclick="previewBillPrint()" style="font-size:12px">명세서 출력</button>
                   <button class="btn btn-secondary" onclick="clearAllBills()" style="font-size:12px">청구 재생성</button>
+                  <button class="btn btn-secondary" onclick="_delSel('billing-tbody','청구')" style="font-size:12px">선택삭제</button>
                   <button class="btn btn-primary" onclick="generateBills()">일괄 청구 생성</button>
                 </div>
             </div>
@@ -327,10 +337,10 @@
             </div>
             <table>
               <thead>
-                <tr><th>세대</th><th>청구월</th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>TV수신료</th><th>공용</th><th>연체료</th><th>합계</th><th>복지할인</th><th>선수금차감</th><th>납부상태</th><th>관리</th></tr>
+                <tr><th style="width:32px"><input type="checkbox" data-chk-all="billing-tbody" onchange="_chkAll('billing-tbody')"></th><th onclick="_sortBy('billing-tbody','name')" style="cursor:pointer">세대<span id="sort-billing-tbody-name"></span></th><th onclick="_sortBy('billing-tbody','ym')" style="cursor:pointer">청구월<span id="sort-billing-tbody-ym"></span></th><th>월세</th><th>관리비</th><th>전기</th><th>수도</th><th>TV수신료</th><th>공용</th><th>연체료</th><th>합계</th><th>복지할인</th><th>선수금차감</th><th>납부상태</th><th>관리</th></tr>
               </thead>
               <tbody id="billing-tbody">
-                <tr><td colspan="14">청구 내역이 없습니다.</td></tr>
+                <tr><td colspan="15">청구 내역이 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -360,22 +370,23 @@
               </div>
               <table>
                 <thead>
-                  <tr><th>세대</th><th>청구월</th><th>청구액</th><th>납부액</th><th>미납액</th><th>납부일</th><th>연체정보</th><th>관리</th></tr>
+                  <tr><th style="width:32px"><input type="checkbox" data-chk-all="payment-tbody" onchange="_chkAll('payment-tbody')"></th><th onclick="_sortBy('payment-tbody','name')" style="cursor:pointer">세대<span id="sort-payment-tbody-name"></span></th><th onclick="_sortBy('payment-tbody','ym')" style="cursor:pointer">청구월<span id="sort-payment-tbody-ym"></span></th><th>청구액</th><th>납부액</th><th>미납액</th><th onclick="_sortBy('payment-tbody','date')" style="cursor:pointer">납부일<span id="sort-payment-tbody-date"></span></th><th>연체정보</th><th>관리</th></tr>
                 </thead>
                 <tbody id="payment-tbody">
-                  <tr><td colspan="7">수납 내역이 없습니다.</td></tr>
+                  <tr><td colspan="8">수납 내역이 없습니다.</td></tr>
                 </tbody>
               </table>
             </div>
 
             <div id="ptab-arrears" class="tab-content">
               <div id="arrears-summary" style="padding:10px 16px;border-bottom:1px solid #eee;font-size:13px;display:flex;gap:16px"></div>
+              <div style="padding:4px 16px 8px"><button class="btn btn-secondary" onclick="_delSel('arrears-tbody','미수금')" style="font-size:12px;padding:4px 10px">선택삭제</button></div>
               <table>
                 <thead>
-                  <tr><th>세대</th><th>미납건수</th><th>총 청구액</th><th>총 납부액</th><th>총 미납액</th><th>최장 연체일</th><th>가장 오래된 미납</th></tr>
+                  <tr><th style="width:32px"><input type="checkbox" data-chk-all="arrears-tbody" onchange="_chkAll('arrears-tbody')"></th><th onclick="_sortBy('arrears-tbody','name')" style="cursor:pointer">세대<span id="sort-arrears-tbody-name"></span></th><th>미납건수</th><th>총 청구액</th><th>총 납부액</th><th>총 미납액</th><th>최장 연체일</th><th>가장 오래된 미납</th></tr>
                 </thead>
                 <tbody id="arrears-tbody">
-                  <tr><td colspan="7">미수금이 없습니다.</td></tr>
+                  <tr><td colspan="8">미수금이 없습니다.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -386,9 +397,9 @@
                 <button class="btn btn-primary" onclick="showModal('prepaid')">+ 선수금 등록</button>
               </div>
               <table>
-                <thead><tr><th>세대</th><th>입금액</th><th>잔액</th><th>등록일</th><th>관리</th></tr></thead>
+                <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="prepaid-tbody" onchange="_chkAll('prepaid-tbody')"></th><th onclick="_sortBy('prepaid-tbody','name')" style="cursor:pointer">세대<span id="sort-prepaid-tbody-name"></span></th><th>입금액</th><th>잔액</th><th onclick="_sortBy('prepaid-tbody','date')" style="cursor:pointer">등록일<span id="sort-prepaid-tbody-date"></span></th><th>관리</th></tr></thead>
                 <tbody id="prepaid-tbody">
-                  <tr><td colspan="5">선수금 내역이 없습니다.</td></tr>
+                  <tr><td colspan="6">선수금 내역이 없습니다.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -398,7 +409,7 @@
               <table>
                 <thead><tr><th>세대</th><th>계약기간</th><th>최초 보증금</th><th>차감액</th><th>잔액</th><th>차감내역</th></tr></thead>
                 <tbody id="deposit-tbody">
-                  <tr><td colspan="6">보증금 내역이 없습니다.</td></tr>
+                  <tr><td colspan="7">보증금 내역이 없습니다.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -416,10 +427,10 @@
               </div>
               <table>
                 <thead>
-                  <tr><th>제목</th><th>작성일</th><th>발송상태</th><th>관리</th></tr>
+                  <tr><th style="width:32px"><input type="checkbox" data-chk-all="notice-tbody" onchange="_chkAll('notice-tbody')"></th><th>제목</th><th>작성일</th><th>발송상태</th><th>관리</th></tr>
               </thead>
               <tbody id="notice-tbody">
-                <tr><td colspan="4">공지가 없습니다.</td></tr>
+                <tr><td colspan="5">공지가 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -435,10 +446,10 @@
             </div>
             <table>
               <thead>
-                <tr><th>제목</th><th>세대</th><th>작성자</th><th>작성일</th><th>상태</th><th>관리</th></tr>
+                <tr><th style="width:32px"><input type="checkbox" data-chk-all="inquiry-tbody" onchange="_chkAll('inquiry-tbody')"></th><th>제목</th><th>세대</th><th>작성자</th><th>작성일</th><th>상태</th><th>관리</th></tr>
               </thead>
               <tbody id="inquiry-tbody">
-                <tr><td colspan="6">민원/문의가 없습니다.</td></tr>
+                <tr><td colspan="7">민원/문의가 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -456,13 +467,14 @@
                 <h3>사용자 목록</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="user-search" placeholder="이름 / 아이디 검색..." oninput="renderUsers()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn btn-secondary" onclick="_delSel('user-tbody','사용자')" style="font-size:12px">선택삭제</button>
                   <button class="btn btn-primary" onclick="showModal('user')">+ 사용자 추가</button>
                 </div>
               </div>
               <div class="table-wrap"><table class="table-dense">
-                <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>연락처</th><th>권한</th><th>세대</th><th>상태</th><th>가입일</th><th>관리</th></tr></thead>
+                <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="user-tbody" onchange="_chkAll('user-tbody')"></th><th>아이디</th><th>이름</th><th>이메일</th><th>연락처</th><th>권한</th><th>세대</th><th>상태</th><th>가입일</th><th>관리</th></tr></thead>
                 <tbody id="user-tbody">
-                  <tr><td colspan="9">등록된 사용자가 없습니다.</td></tr>
+                  <tr><td colspan="10">등록된 사용자가 없습니다.</td></tr>
                 </tbody>
               </table></div>
             </div>

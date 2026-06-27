@@ -38,21 +38,36 @@ const WELFARE = {
  * @param {number} kwh - 전력 사용량
  * @returns {number} - 부가세 포함 총 전기요금 (원)
  */
-function calcElec(kwh) {
-  let cost = 0
-  if (kwh <= 200) cost += 910
-  else if (kwh <= 400) cost += 1600
-  else cost += 7300
+function calcElec(kwh, month) {
+  const isSummer = month >= 7 && month <= 8
+  const isWinter = month >= 12 || month <= 2
+  const superuser = isSummer || isWinter
+  let base = 0
+  if (kwh <= 200) base += 910
+  else if (kwh <= 400) base += 1600
+  else base += 7300
   let remaining = kwh
   const t1 = Math.min(remaining, 200)
-  cost += t1 * 98.5; remaining -= t1
+  base += t1 * 120; remaining -= t1
   if (remaining > 0) {
     const t2 = Math.min(remaining, 200)
-    cost += t2 * 184.6; remaining -= t2
+    base += t2 * 214.6; remaining -= t2
   }
-  if (remaining > 0) cost += remaining * 276.7
-  cost *= 1.137
-  return Math.round(cost)
+  if (remaining > 0) {
+    const normal = Math.min(remaining, superuser ? 600 : Infinity)
+    base += normal * 307.3; remaining -= normal
+  }
+  if (remaining > 0 && superuser) {
+    base += remaining * 736.2
+  } else if (remaining > 0) {
+    base += remaining * 307.3
+  }
+  const envFee = kwh * 9
+  const fuelFee = kwh * 5
+  const subtotal = base + envFee + fuelFee
+  const vat = Math.round(subtotal * 0.1)
+  const fund = Math.floor(subtotal * 0.032 / 10) * 10
+  return Math.floor((subtotal + vat + fund) / 10) * 10
 }
 
 /**
@@ -235,11 +250,12 @@ function renderBuildings() {
   const q = (document.getElementById('building-search')?.value || '').toLowerCase()
   if (q) list = list.filter(b => (b.name || '').toLowerCase().includes(q))
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="6">등록된 건물이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7">등록된 건물이 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = list.map(b => `
     <tr>
+      ${_ck(b.id)}
       <td><a href="#" onclick="editBuilding(${b.id});return false" style="color:#2d5427;text-decoration:none">${b.name}</a></td>
       <td>${b.address || '-'}</td>
       <td>${b.adminName || '-'}</td>
@@ -305,8 +321,10 @@ function renderUnits() {
       (u.name || '').toLowerCase().includes(q)
     )
   }
+  units = _sorted(units, 'unit-tbody', u => u.name)
+  document.getElementById('sort-unit-tbody-name').textContent = _sortIcon('unit-tbody', 'name')
   if (!units.length) {
-    tbody.innerHTML = '<tr><td colspan="14">등록된 세대가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="15">등록된 세대가 없습니다.</td></tr>'
     document.getElementById('unit-pagination').innerHTML = ''
     return
   }
@@ -321,6 +339,7 @@ function renderUnits() {
     const bil = (t, v) => v === 'individual' ? `<span class="badge badge-pending" style="font-size:10px">${t} 개별</span>` : `<span class="badge badge-paid" style="font-size:10px">${t} 통합</span>`
     const billLabels = `${bil('전기', u.elecBillingType)} ${bil('수도', u.waterBillingType)}`
     return `<tr class="${vacantClass}">
+      ${_ck(u.id)}
       <td style="color:#888;font-size:12px">${start + i + 1}</td>
       <td><a href="#" onclick="editUnit(${u.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${u.name}</a></td>
       <td>${bld ? bld.name : '-'}</td>
@@ -374,8 +393,10 @@ function renderContracts() {
   if (contractStatusFilter) {
     contracts = contracts.filter(c => c.status === contractStatusFilter)
   }
+  contracts = _sorted(contracts, 'contract-tbody', c => { const u = Store.getUnits().find(x => x.id === c.unitId); return u ? u.name : '' })
+  document.getElementById('sort-contract-tbody-name').textContent = _sortIcon('contract-tbody', 'name')
   if (!contracts.length) {
-    tbody.innerHTML = '<tr><td colspan="18">등록된 계약이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="19">등록된 계약이 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = contracts.map(c => {
@@ -385,6 +406,7 @@ function renderContracts() {
     const activeClass = c.status === 'active' ? 'row-active' : ''
     const hasFile = c.fileName && c.fileData
     return `<tr class="${activeClass}">
+      ${_ck(c.id)}
       <td>${unit ? `<a href="#" onclick="editContract(${c.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit.name}</a>` : '알 수 없음'}</td>
       <td>${c.tenant || '-'}</td>
       <td>${c.phone || '-'}</td>
@@ -420,13 +442,23 @@ function renderMeters() {
       return unit && unit.name.toLowerCase().includes(q)
     })
   }
+  const _sortMeter = (m) => {
+    const s = _sort['meter-tbody']
+    if (s && s.key === 'name') { const u = Store.getUnits().find(x => x.id === m.unitId); return u ? u.name : '' }
+    if (s && s.key === 'date') return String(m.date || '')
+    return ''
+  }
+  meters = _sorted(meters, 'meter-tbody', _sortMeter)
+  document.getElementById('sort-meter-tbody-name').textContent = _sortIcon('meter-tbody', 'name')
+  document.getElementById('sort-meter-tbody-date').textContent = _sortIcon('meter-tbody', 'date')
   if (!meters.length) {
-    tbody.innerHTML = '<tr><td colspan="5">검침 데이터가 없습니다.</td></tr>'
+      tbody.innerHTML = '<tr><td colspan="6">검침 데이터가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = meters.map(m => {
     const unit = Store.getUnits().find(u => u.id === m.unitId)
     return `<tr>
+      ${_ck(m.id)}
       <td><a href="#" onclick="editMeter(${m.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${m.date}</td>
       <td>${m.electricity || 0}</td>
@@ -491,9 +523,17 @@ function renderBills() {
     bills = bills.filter(b => b.unitId === filterUnit)
   }
   if (filterStatus) bills = bills.filter(b => b.status === filterStatus)
-  bills.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth) || (a.id - b.id))
+  const _sortBill = (b) => {
+    const s = _sort['billing-tbody']
+    if (s && s.key === 'name') { const u = Store.getUnits().find(x => x.id === b.unitId); return u ? u.name : '' }
+    if (s && s.key === 'ym') return b.yearMonth || ''
+    return ''
+  }
+  bills = _sorted(bills, 'billing-tbody', _sortBill)
+  document.getElementById('sort-billing-tbody-name').textContent = _sortIcon('billing-tbody', 'name')
+  document.getElementById('sort-billing-tbody-ym').textContent = _sortIcon('billing-tbody', 'ym')
   if (!bills.length) {
-    tbody.innerHTML = `<tr><td colspan="14">청구 내역이 없습니다. (필터: ${filterYm || '전체'} / ${matchedUnitName || '전체'} / ${filterStatus || '전체'})</td></tr>`
+    tbody.innerHTML = `<tr><td colspan="15">청구 내역이 없습니다. (필터: ${filterYm || '전체'} / ${matchedUnitName || '전체'} / ${filterStatus || '전체'})</td></tr>`
     return
   }
   tbody.innerHTML = bills.map(b => {
@@ -505,8 +545,9 @@ function renderBills() {
     const vacantClass = hasActive ? '' : 'row-vacant'
     const prepaidAmt = allBills.length ? Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0) : 0
     const wf = WELFARE[b.welfareType]
-    const welfareTag = wf ? '<span style="font-weight:700;color:#d32f2f;font-size:12px">복지할인</span>' : '-'
+    const welfareTag = wf && (wf.elecDiscount > 0 || wf.waterDiscountPct > 0) ? `<span style="font-weight:700;color:#d32f2f;font-size:11px">${wf.label} (-${fmt(wf.elecDiscount)})</span>` : '-'
     return `<tr class="${vacantClass}">
+      ${_ck(b.id)}
       <td><a href="#" onclick="showBillDetail(${b.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${b.yearMonth}</td>
       <td>${fmt(b.rent)}</td>
@@ -536,10 +577,21 @@ function renderPayments() {
     })
   }
   if (!payments.length) {
-    tbody.innerHTML = '<tr><td colspan="8">수납 내역이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="9">수납 내역이 없습니다.</td></tr>'
     return
   }
-  payments.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (b.id - a.id))
+  const _sortPay = (p) => {
+    const s = _sort['payment-tbody']
+    const bill = Store.getBills().find(b => b.id === p.billId)
+    if (s && s.key === 'name') { const u = Store.getUnits().find(x => x.id === p.unitId); return u ? u.name : '' }
+    if (s && s.key === 'ym') return bill ? bill.yearMonth : ''
+    if (s && s.key === 'date') return String(p.date || '')
+    return ''
+  }
+  payments = _sorted(payments, 'payment-tbody', _sortPay)
+  document.getElementById('sort-payment-tbody-name').textContent = _sortIcon('payment-tbody', 'name')
+  document.getElementById('sort-payment-tbody-ym').textContent = _sortIcon('payment-tbody', 'ym')
+  document.getElementById('sort-payment-tbody-date').textContent = _sortIcon('payment-tbody', 'date')
   tbody.innerHTML = payments.map(p => {
     const unit = Store.getUnits().find(u => u.id === p.unitId)
     const bill = Store.getBills().find(b => b.id === p.billId)
@@ -550,6 +602,7 @@ function renderPayments() {
     const ob = overdue && overdue.overdueDays > 0 ? overdueBadge(overdue.overdueDays) : null
     const srcLabel = p.source === 'prepaid' ? ' (선수금)' : p.source === 'deposit' ? ' (보증금)' : ''
     return `<tr>
+      ${_ck(p.id)}
       <td><a href="#" onclick="showBillDetail(${bill ? bill.id : 0});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${bill ? bill.yearMonth : '-'}</td>
       <td>${fmt(bill ? bill.total : 0)}</td>
@@ -652,7 +705,7 @@ function renderArrears() {
   const units = Store.getUnits()
   const overdue = Store.getOverdueBills()
   if (!overdue.length) {
-    tbody.innerHTML = '<tr><td colspan="7">미수금이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="8">미수금이 없습니다.</td></tr>'
     if (summary) summary.innerHTML = '<span>총 미수금: <strong>0원</strong></span>'
     return
   }
@@ -673,11 +726,19 @@ function renderArrears() {
       return { uid: parseInt(uid), name: unit ? unit.name : '?', count: items.length, totalBilled, totalPaid, totalUnpaid, maxOverdue, oldest }
     })
     .sort((a, b) => b.totalUnpaid - a.totalUnpaid)
+  const _sortArr = (r) => {
+    const s = _sort['arrears-tbody']
+    if (s && s.key === 'name') return r.name
+    return ''
+  }
+  const sortedRows = _sorted(rows, 'arrears-tbody', _sortArr) || rows
+  document.getElementById('sort-arrears-tbody-name').textContent = _sortIcon('arrears-tbody', 'name')
   const grandTotal = rows.reduce((s, r) => s + r.totalUnpaid, 0)
   if (summary) summary.innerHTML = `<span>연체 세대: <strong>${rows.length}세대</strong></span><span>총 미수금: <strong style="color:#d32f2f">${fmt(grandTotal)}</strong></span>`
-  tbody.innerHTML = rows.map(r => {
+  tbody.innerHTML = sortedRows.map(r => {
     const badgeCls = r.maxOverdue >= 60 ? 'badge-unpaid' : r.maxOverdue >= 30 ? 'badge-pending' : ''
     return `<tr>
+      ${_ck(r.uid)}
       <td><a href="#" onclick="switchPaymentTab('payments');document.getElementById('payment-search').value='${esc(r.name)}';renderPayments();return false" style="color:#2d5427;text-decoration:none;font-weight:600">${esc(r.name)}</a></td>
       <td>${r.count}건</td>
       <td>${fmt(r.totalBilled)}</td>
@@ -757,13 +818,22 @@ function renderPrepaids() {
   const fid = filter ? parseInt(filter.value) || 0 : 0
   if (fid) list = list.filter(p => p.unitId === fid)
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="5">선수금 내역이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="6">선수금 내역이 없습니다.</td></tr>'
     return
   }
-  list.sort((a, b) => b.id - a.id)
+  const _sortPrep = (p) => {
+    const s = _sort['prepaid-tbody']
+    if (s && s.key === 'name') { const u = Store.getUnits().find(x => x.id === p.unitId); return u ? u.name : '' }
+    if (s && s.key === 'date') return String(p.createdAt || '')
+    return ''
+  }
+  list = _sorted(list, 'prepaid-tbody', _sortPrep)
+  document.getElementById('sort-prepaid-tbody-name').textContent = _sortIcon('prepaid-tbody', 'name')
+  document.getElementById('sort-prepaid-tbody-date').textContent = _sortIcon('prepaid-tbody', 'date')
   tbody.innerHTML = list.map(p => {
     const unit = Store.getUnits().find(u => u.id === p.unitId)
     return `<tr>
+      ${_ck(p.id)}
       <td>${unit ? esc(unit.name) : '알 수 없음'}</td>
       <td>${fmt(p.amount)}</td>
       <td>${fmt(p.balance)}</td>
@@ -805,11 +875,12 @@ function renderNotices() {
   const q = (document.getElementById('notice-search')?.value || '').toLowerCase()
   if (q) notices = notices.filter(n => (n.title || '').toLowerCase().includes(q))
   if (!notices.length) {
-    tbody.innerHTML = '<tr><td colspan="4">공지가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="5">공지가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = notices.map(n => `
     <tr>
+      ${_ck(n.id)}
       <td><a href="#" onclick="showNoticeDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${n.title}</a></td>
       <td>${n.date}</td>
       <td><span class="badge ${n.sent ? 'badge-paid' : 'badge-pending'}">${n.sent ? '발송완료' : '미발송'}</span></td>
@@ -829,11 +900,12 @@ function renderInquiries() {
   if (q) list = list.filter(n => (n.title || '').toLowerCase().includes(q) || (n.unitName || '').toLowerCase().includes(q))
   const units = Store.getUnits()
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="6">민원/문의가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7">민원/문의가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = list.sort((a, b) => b.createdAt?.localeCompare(a.createdAt)).map(n => `
     <tr>
+      ${_ck(n.id)}
       <td><a href="#" onclick="showInquiryDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${esc(n.title)}</a></td>
       <td>${esc(n.unitName || '')}</td>
       <td>${esc(n.userName || '')}</td>
@@ -884,7 +956,7 @@ function renderUsers() {
   if (q) users = users.filter(u => (u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q))
   const units = Store.getUnits()
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="9">등록된 사용자가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="10">등록된 사용자가 없습니다.</td></tr>'
     return
   }
   tbody.innerHTML = users.map(u => {
@@ -893,6 +965,7 @@ function renderUsers() {
     const canDelete = currentUser && currentUser.id !== u.id
     const isPending = u.status !== 'active'
     return `<tr>
+      ${_ck(u.id)}
       <td style="font-weight:600">${esc(u.username)}</td>
       <td>${esc(u.name || '-')}</td>
       <td>${esc(u.email || '-')}</td>
@@ -1824,7 +1897,7 @@ function generateBills() {
     if (lastMeter && prevMeter) {
       if (u.elecBillingType !== 'individual') {
         elecUsage = Math.max(0, lastMeter.electricity - prevMeter.electricity)
-        elecCost = calcElec(elecUsage)
+        elecCost = calcElec(elecUsage, parseInt(ym.split('-')[1]))
       }
       if (u.waterBillingType !== 'individual') {
         waterUsage = Math.max(0, lastMeter.water - prevMeter.water)
@@ -2052,6 +2125,8 @@ function previewBillPrint() {
     const wf = WELFARE[b.welfareType]
     const hasElecDiscount = wf && wf.elecDiscount > 0
     const hasWaterDiscount = wf && wf.waterDiscountPct > 0
+    const waterDiscountAmt = hasWaterDiscount ? Math.round(b.water * wf.waterDiscountPct / (1 - wf.waterDiscountPct)) : 0
+    const totalDiscount = (hasElecDiscount ? wf.elecDiscount : 0) + waterDiscountAmt
     html += `<div class="bill">
       <div class="header">
         <div class="title1">(${esc(unitName)}) 전기·수도청구서</div>
@@ -2062,11 +2137,12 @@ function previewBillPrint() {
         <tr><th>항목</th><th class="right">금액</th></tr>
         <tr><td>월세</td><td class="right">${fmt(b.rent)}</td></tr>
         <tr><td>관리비</td><td class="right">${fmt(b.maintenanceFee)}</td></tr>
-        <tr><td>전기요금${hasElecDiscount ? '<span class="welfare-tag"> (복지할인)</span>' : ''}</td><td class="right">${fmt(b.electricity)}</td></tr>
-        <tr><td>수도요금${hasWaterDiscount ? '<span class="welfare-tag"> (복지할인)</span>' : ''}</td><td class="right">${fmt(b.water)}</td></tr>
+        <tr><td>전기요금</td><td class="right">${fmt(b.electricity)}</td></tr>
+        <tr><td>수도요금</td><td class="right">${fmt(b.water)}</td></tr>
         <tr><td>공용관리비</td><td class="right">${fmt(b.commonFee)}</td></tr>
         <tr><td>TV수신료</td><td class="right">${fmt(b.tvFee)}</td></tr>
         <tr><td>연체료</td><td class="right">${fmt(b.lateFee)}</td></tr>
+        ${hasElecDiscount || hasWaterDiscount ? `<tr><td style="color:#d32f2f;font-size:9pt">복지할인</td><td class="right" style="color:#d32f2f;font-size:9pt">-${fmt(totalDiscount)}</td></tr>` : ''}
         <tr><td style="font-weight:700;font-size:9pt">합계</td><td style="font-weight:700;font-size:9pt;text-align:right">${fmt(b.total)}</td></tr>
         ${(() => {
           const prepaidAmt = Store.getPayments().filter(p => p.billId === b.id && p.source === 'prepaid').reduce((s, p) => s + p.amount, 0)
@@ -2260,7 +2336,7 @@ function renderMaintenance() {
   }
 
   if (!records.length) {
-    tbody.innerHTML = '<tr><td colspan="11">유지보수 내역이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="12">유지보수 내역이 없습니다.</td></tr>'
     return
   }
 
@@ -2278,6 +2354,7 @@ function renderMaintenance() {
       : r.priority === 'emergency' ? 'mnt-priority-emergency'
       : r.priority === 'normal' ? 'mnt-priority-normal' : ''
     return `<tr class="${priorityCls}">
+      ${_ck(r.id)}
       <td>${records.length - i}</td>
       <td><a href="#" onclick="editMaintenance(${r.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? esc(unit.name) : '?'}</a></td>
       <td>${esc(cat ? cat.name : '-')}</td>
@@ -2403,5 +2480,45 @@ function saveMaintenanceModal() {
   if (state.editingId) Store.updateMaintenanceRecord(state.editingId, data)
   else Store.addMaintenanceRecord(data)
 }
+
+/* === 공통: 선택/정렬/일괄삭제 === */
+const _sort = {}
+function _sortBy(tid, key) {
+  const s = _sort[tid] || {}
+  _sort[tid] = { key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }
+  renderAll()
+}
+function _sortIcon(tid, key) {
+  const s = _sort[tid]
+  if (!s || s.key !== key) return ''
+  return s.dir === 'asc' ? ' ▲' : ' ▼'
+}
+function _sorted(list, tid, fn) {
+  const s = _sort[tid]
+  if (!s) return list
+  return [...list].sort((a, b) => {
+    const va = fn(a), vb = fn(b)
+    const c = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+    return s.dir === 'asc' ? c : -c
+  })
+}
+function _chkAll(tbodyId) {
+  const cb = document.querySelector(`[data-chk-all="${tbodyId}"]`)
+  if (!cb) return
+  document.querySelectorAll(`#${tbodyId} .chk`).forEach(c => c.checked = cb.checked)
+}
+function _delSel(tbodyId, label) {
+  const ids = Array.from(document.querySelectorAll(`#${tbodyId} .chk:checked`)).map(c => parseInt(c.value))
+  if (!ids.length) return alert('선택된 항목이 없습니다.')
+  if (!confirm(`${ids.length}개의 ${label}을(를) 삭제하시겠습니까?`)) return
+  const tname = { 'building-tbody':'Building','unit-tbody':'Unit','contract-tbody':'Contract','meter-tbody':'Meter','billing-tbody':'Bill','payment-tbody':'Payment','prepaid-tbody':'Prepaid','deposit-tbody':'DepositDeduction','notice-tbody':'Notice','inquiry-tbody':'Inquiry','mnt-tbody':'MaintenanceRecord','user-tbody':'User' }[tbodyId]
+  ids.forEach(id => {
+    if (tname === 'Notice') deleteNotice(id)
+    else if (tname === 'Bill') { Store._data.bills = Store.getBills().filter(b => b.id !== id); Store.save() }
+    else Store['delete' + tname](id)
+  })
+  renderAll()
+}
+function _ck(id) { return `<td style="width:32px;text-align:center"><input type="checkbox" class="chk" value="${id}"></td>` }
 
 init()
