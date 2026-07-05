@@ -2604,7 +2604,7 @@ function _delSel(tbodyId, label) {
   const tname = { 'building-tbody':'Building','unit-tbody':'Unit','contract-tbody':'Contract','meter-tbody':'Meter','billing-tbody':'Bill','payment-tbody':'Payment','prepaid-tbody':'Prepaid','deposit-tbody':'DepositDeduction','notice-tbody':'Notice','inquiry-tbody':'Inquiry','mnt-tbody':'MaintenanceRecord','user-tbody':'User' }[tbodyId]
   ids.forEach(id => {
     if (tname === 'Notice') deleteNotice(id)
-    else if (tname === 'Bill') { Store._data.bills = Store.getBills().filter(b => b.id !== id); Store.save() }
+    else if (tname === 'Bill') { Store._addDeletedId('bills', id); Store._data.bills = Store.getBills().filter(b => b.id !== id); Store.save() }
     else Store['delete' + tname](id)
   })
   renderAll()

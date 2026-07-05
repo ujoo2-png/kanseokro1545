@@ -9,7 +9,21 @@ const Store = {
   version: APP_VERSION,
   _data: null,
   _key: 'kanseokro1545_data',
+  _delKey: 'kanseokro1545_deleted_ids',
   _idCounter: Date.now(),
+
+  _getDeletedIds() {
+    try { return JSON.parse(localStorage.getItem(this._delKey) || '{}') } catch { return {} }
+  },
+  _saveDeletedIds(map) {
+    localStorage.setItem(this._delKey, JSON.stringify(map))
+  },
+  _addDeletedId(table, id) {
+    const map = this._getDeletedIds()
+    if (!map[table]) map[table] = []
+    if (!map[table].includes(id)) map[table].push(id)
+    this._saveDeletedIds(map)
+  },
 
   _nextId() {
     this._idCounter++
@@ -113,6 +127,7 @@ const Store = {
     const sb = getSupabase()
     if (!sb) return
     const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications']
+    const deletedIds = this._getDeletedIds()
     for (const table of tables) {
       try {
         const { data } = await sb.from(this._sbTable(table)).select('*')
@@ -120,7 +135,9 @@ const Store = {
           const remote = this._toCamel(data)
           const local = this._data[table] || []
           const merged = [...local]
+          const skip = deletedIds[table] || []
           for (const r of remote) {
+            if (skip.includes(r.id)) continue
             const idx = merged.findIndex(x => x.id === r.id)
             if (idx > -1) merged[idx] = { ...r, ...merged[idx] }
             else merged.push(r)
@@ -238,6 +255,7 @@ const Store = {
   },
   /** 사용자 삭제 */
   deleteUser(id) {
+    this._addDeletedId('users', id)
     this._data.users = (this._data.users || []).filter(x => x.id !== id)
     this._sbDelete('users', id)
     this.save()
@@ -267,6 +285,7 @@ const Store = {
   },
   /** 건물 삭제 (관련 데이터 유지) */
   deleteBuilding(id) {
+    this._addDeletedId('buildings', id)
     this._data.buildings = this._data.buildings.filter(x => x.id !== id)
     this._sbDelete('buildings', id)
     this.save()
@@ -286,7 +305,7 @@ const Store = {
   deleteUnit(id) {
     const forDelete = ['meters','bills','payments','prepaids','depositDeductions','contracts'].map(t => {
       const items = (this._data[t] || []).filter(x => x.unitId === id)
-      items.forEach(item => this._sbDelete(t, item.id))
+      items.forEach(item => { this._addDeletedId(t, item.id); this._sbDelete(t, item.id) })
       return t
     })
     this._data.units = this._data.units.filter(u => u.id !== id)
@@ -296,6 +315,7 @@ const Store = {
     this._data.prepaids = (this._data.prepaids || []).filter(p => p.unitId !== id)
     this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.unitId !== id)
     this._data.contracts = this._data.contracts.filter(c => c.unitId !== id)
+    this._addDeletedId('units', id)
     this._sbDelete('units', id)
     this.save()
   },
@@ -312,6 +332,7 @@ const Store = {
   },
   /** 계약 삭제 */
   deleteContract(id) {
+    this._addDeletedId('contracts', id)
     this._data.contracts = this._data.contracts.filter(x => x.id !== id)
     this._sbDelete('contracts', id)
     this.save()
@@ -329,6 +350,7 @@ const Store = {
   },
   /** 검침 삭제 */
   deleteMeter(id) {
+    this._addDeletedId('meters', id)
     this._data.meters = this._data.meters.filter(m => m.id !== id)
     this._sbDelete('meters', id)
     this.save()
@@ -352,6 +374,7 @@ const Store = {
   addPayment(p) { this._data.payments.push({ id: this._nextId(), ...p }); this.save() },
   /** 수납 삭제 */
   deletePayment(id) {
+    this._addDeletedId('payments', id)
     this._data.payments = this._data.payments.filter(p => p.id !== id)
     this._sbDelete('payments', id)
     this.save()
@@ -414,6 +437,7 @@ const Store = {
   },
   /** 선수금 삭제 */
   deletePrepaid(id) {
+    this._addDeletedId('prepaids', id)
     this._data.prepaids = (this._data.prepaids || []).filter(p => p.id !== id)
     this._sbDelete('prepaids', id)
     this.save()
@@ -429,6 +453,7 @@ const Store = {
   },
   /** 보증금 차감 내역 삭제 */
   deleteDepositDeduction(id) {
+    this._addDeletedId('depositDeductions', id)
     this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.id !== id)
     this._sbDelete('depositDeductions', id)
     this.save()
@@ -442,6 +467,7 @@ const Store = {
     if (idx > -1) { this._data.inquiries[idx] = { ...this._data.inquiries[idx], ...data }; this.save() }
   },
   deleteInquiry(id) {
+    this._addDeletedId('inquiries', id)
     this._data.inquiries = (this._data.inquiries || []).filter(x => x.id !== id)
     this._sbDelete('inquiries', id)
     this.save()
@@ -462,6 +488,7 @@ const Store = {
   getMaintenanceCategories() { return this._data.maintenanceCategories || [] },
   addMaintenanceCategory(c) { this._data.maintenanceCategories.push({ id: this._nextId(), ...c }); this.save() },
   deleteMaintenanceCategory(id) {
+    this._addDeletedId('maintenanceCategories', id)
     this._data.maintenanceCategories = (this._data.maintenanceCategories || []).filter(x => x.id !== id)
     this._sbDelete('maintenanceCategories', id)
     this.save()
@@ -475,6 +502,7 @@ const Store = {
     if (idx > -1) { this._data.maintenanceRecords[idx] = { ...this._data.maintenanceRecords[idx], ...data }; this.save() }
   },
   deleteMaintenanceRecord(id) {
+    this._addDeletedId('maintenanceRecords', id)
     this._data.maintenanceRecords = (this._data.maintenanceRecords || []).filter(x => x.id !== id)
     this._sbDelete('maintenanceRecords', id)
     this.save()
@@ -488,6 +516,7 @@ const Store = {
     if (idx > -1) { this._data.notifications[idx] = { ...this._data.notifications[idx], ...data }; this.save() }
   },
   deleteNotification(id) {
+    this._addDeletedId('notifications', id)
     this._data.notifications = (this._data.notifications || []).filter(x => x.id !== id)
     this._sbDelete('notifications', id)
     this.save()
