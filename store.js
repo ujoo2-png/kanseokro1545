@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.8'
+const APP_VERSION = 'v1.16.9'
 
 const Store = {
   version: APP_VERSION,
@@ -82,7 +82,25 @@ const Store = {
     this._migrateMeterDates()
     this.save()
     await this._loadFromSupabase()
+    await this._syncLocalUsers()
     return this._data
+  },
+
+  /** 기존 로컬 사용자 중 Supabase에 없는 계정을 한 번 동기화 */
+  async _syncLocalUsers() {
+    if (localStorage.getItem('kanseokro1545_users_synced')) return
+    const sb = getSupabase()
+    if (!sb) return
+    const users = this.getUsers()
+    for (const u of users) {
+      try {
+        const { data } = await sb.from('users').select('id').eq('id', u.id)
+        if (!data || data.length === 0) {
+          await this._sbSync('users', u)
+        }
+      } catch (e) { /* skip */ }
+    }
+    localStorage.setItem('kanseokro1545_users_synced', '1')
   },
 
   _ensureArrays() {
