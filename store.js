@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.9'
+const APP_VERSION = 'v1.16.10'
 
 const Store = {
   version: APP_VERSION,
@@ -54,6 +54,7 @@ const Store = {
     if (!sb) return
     try {
       const snake = this._toSnake(data)
+      if (table === 'users') delete snake.password
       if (snake.id && snake.id > 0) {
         const { id, ...rest } = snake
         await sb.from(this._sbTable(table)).upsert({ id, ...rest })
@@ -207,7 +208,9 @@ const Store = {
     for (const table of tables) {
       const items = this._data[table]
       if (!items || !items.length) continue
-      try { await sb.from(this._sbTable(table)).upsert(this._toSnake(items), { onConflict: 'id' }) }
+      const snake = this._toSnake(items)
+      if (table === 'users') snake.forEach(u => delete u.password)
+      try { await sb.from(this._sbTable(table)).upsert(snake, { onConflict: 'id' }) }
       catch (e) { console.warn('Supabase save:', table, e.message) }
     }
   },

@@ -1037,6 +1037,18 @@ function approveUser(id) {
   renderAll()
 }
 
+/** 현재 관리자를 제외한 모든 사용자 삭제 */
+function cleanupUsers() {
+  if (!currentUser) return alert('로그인이 필요합니다.')
+  const count = Store.getUsers().filter(u => u.id !== currentUser.id).length
+  if (!count) return alert('삭제할 사용자가 없습니다.')
+  if (!confirm(`현재 로그인한 계정을 제외한 ${count}명의 사용자를 전부 삭제하시겠습니까?`)) return
+  if (!confirm('정말입니까? 이 작업은 되돌릴 수 없습니다.')) return
+  Store.getUsers().filter(u => u.id !== currentUser.id).forEach(u => Store.deleteUser(u.id))
+  renderAll()
+  alert(`${count}명의 사용자가 삭제되었습니다.`)
+}
+
 function editUser(id) {
   const user = Store.getUsers().find(x => x.id === id)
   if (user) showModal('user', user)
