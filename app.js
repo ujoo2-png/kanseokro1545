@@ -226,6 +226,7 @@ function switchBuildingTab(tabId) {
 
 /* Render — 모든 페이지 다시 그림 (검색필터 유지) */
 function renderAll() {
+  if (_userListTab !== 'pending') _userListTab = 'all'
   renderBuildings()
   renderUnits()
   renderContracts()
@@ -997,15 +998,30 @@ function renderRecent() {
   }).join('')
 }
 
+let _userListTab = 'all'
+
+function switchUserListTab(tab) {
+  _userListTab = tab
+  document.querySelectorAll('#tab-users .card-header .btn').forEach(b => {
+    b.style.background = b.textContent.includes('승인대기') === (tab === 'pending') ? '#2d5427' : '#e8eaed'
+    b.style.color = b.textContent.includes('승인대기') === (tab === 'pending') ? '#fff' : '#555'
+  })
+  renderUsers()
+}
+
 function renderUsers() {
   const tbody = document.getElementById('user-tbody')
   if (!tbody) return
   let users = Store.getUsers()
+  if (_userListTab === 'pending') users = users.filter(u => u.status !== 'active')
   const q = (document.getElementById('user-search')?.value || '').toLowerCase()
   if (q) users = users.filter(u => (u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q))
   const units = Store.getUnits()
+  // Update pending count badge
+  const pc = document.getElementById('pending-count')
+  if (pc) pc.textContent = Store.getUsers().filter(u => u.status !== 'active').length
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="10">등록된 사용자가 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="10">' + (_userListTab === 'pending' ? '승인 대기 중인 회원이 없습니다.' : '등록된 사용자가 없습니다.') + '</td></tr>'
     return
   }
   tbody.innerHTML = users.map(u => {
@@ -1034,19 +1050,27 @@ function renderUsers() {
 
 function approveUser(id) {
   Store.updateUser(id, { status: 'active' })
-  renderAll()
+  const pc = document.getElementById('pending-count')
+  if (pc) pc.textContent = Store.getUsers().filter(u => u.status !== 'active').length
+  if (_userListTab === 'pending' && Store.getUsers().filter(u => u.status !== 'active').length === 0) {
+    switchUserListTab('all')
+  } else {
+    renderUsers()
+  }
 }
 
-/** 현재 관리자를 제외한 모든 사용자 삭제 */
+/** 미승인(pending) 회원만 일괄 삭제 */
 function cleanupUsers() {
   if (!currentUser) return alert('로그인이 필요합니다.')
-  const count = Store.getUsers().filter(u => u.id !== currentUser.id).length
-  if (!count) return alert('삭제할 사용자가 없습니다.')
-  if (!confirm(`현재 로그인한 계정을 제외한 ${count}명의 사용자를 전부 삭제하시겠습니까?`)) return
+  const pending = Store.getUsers().filter(u => u.id !== currentUser.id && u.status !== 'active')
+  if (!pending.length) return alert('미승인 대기 회원이 없습니다.')
+  if (!confirm(`미승인 회원 ${pending.length}명을 삭제하시겠습니까?`)) return
   if (!confirm('정말입니까? 이 작업은 되돌릴 수 없습니다.')) return
-  Store.getUsers().filter(u => u.id !== currentUser.id).forEach(u => Store.deleteUser(u.id))
+  pending.forEach(u => Store.deleteUser(u.id))
+  const pc = document.getElementById('pending-count')
+  if (pc) pc.textContent = Store.getUsers().filter(u => u.status !== 'active').length
   renderAll()
-  alert(`${count}명의 사용자가 삭제되었습니다.`)
+  alert(`${pending.length}명의 미승인 회원이 삭제되었습니다.`)
 }
 
 function editUser(id) {

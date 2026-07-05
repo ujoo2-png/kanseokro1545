@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.10'
+const APP_VERSION = 'v1.16.11'
 
 const Store = {
   version: APP_VERSION,
@@ -237,21 +237,23 @@ const Store = {
   getUsers() { return this._data.users || [] },
   /** 사용자 추가 */
   addUser(u) {
-    const users = this.getUsers()
-    const user = { id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...u }
-    users.push(user)
-    this._data.users = users
+    try {
+      const users = this.getUsers()
+      const user = { id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...u }
+      users.push(user)
+      this._data.users = users
+    } catch (e) { console.error('addUser error:', e) }
     this._sbSync('users', user)
     this.save()
   },
   /** 사용자 수정 */
   updateUser(id, data) {
-    const idx = this._data.users.findIndex(x => x.id === id)
-    if (idx > -1) {
-      this._data.users[idx] = { ...this._data.users[idx], ...data }
-      this._sbSync('users', this._data.users[idx])
-      this.save()
-    }
+    try {
+      const idx = this._data.users.findIndex(x => x.id === id)
+      if (idx > -1) this._data.users[idx] = { ...this._data.users[idx], ...data }
+    } catch (e) { console.error('updateUser error:', e) }
+    this._sbSync('users', id ? this._data.users?.find(x => x.id === id) : null)
+    this.save()
   },
   /** 사용자 삭제 */
   deleteUser(id) {

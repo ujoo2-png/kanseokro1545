@@ -468,7 +468,9 @@
               <div class="card-header">
                 <h3>사용자 목록</h3>
                 <div style="display:flex;gap:8px;align-items:center">
-                  <input type="text" id="user-search" placeholder="이름 / 아이디 검색..." oninput="renderUsers()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none">
+                  <button class="btn" style="padding:4px 10px;font-size:12px;background:#e8eaed;color:#555" onclick="switchUserListTab('all')">전체</button>
+                  <button class="btn" style="padding:4px 10px;font-size:12px;background:#2d5427;color:#fff" onclick="switchUserListTab('pending')">승인대기 <span id="pending-count" style="background:#fff;color:#2d5427;border-radius:99px;padding:0 6px;margin-left:4px;font-size:11px">0</span></button>
+                  <input type="text" id="user-search" placeholder="이름 / 아이디 검색..." oninput="renderUsers()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;outline:none;margin-left:8px">
                   <button class="btn btn-secondary" onclick="_delSel('user-tbody','사용자')" style="font-size:12px">선택삭제</button>
                   <button class="btn btn-primary" onclick="showModal('user')">+ 사용자 추가</button>
                   <button class="btn btn-danger" onclick="cleanupUsers()" style="font-size:12px">미승인 회원 전체삭제</button>
