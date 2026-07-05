@@ -173,6 +173,7 @@ async function init() {
   }
   renderAll()
   updateStats()
+  initKeepAlive()
 }
 
 async function doLogoutUI() {

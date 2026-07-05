@@ -302,6 +302,7 @@ async function doLogin() {
   restorePageState()
   renderAll()
   updateStats()
+  if (typeof initKeepAlive === 'function') initKeepAlive()
 }
 
 async function doRegister() {

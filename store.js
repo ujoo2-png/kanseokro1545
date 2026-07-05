@@ -112,7 +112,6 @@ const Store = {
     const sb = getSupabase()
     if (!sb) return
     const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications']
-    let remoteUsers = []
     for (const table of tables) {
       try {
         const { data } = await sb.from(this._sbTable(table)).select('*')
@@ -126,15 +125,8 @@ const Store = {
             else merged.push(r)
           }
           this._data[table] = merged
-          if (table === 'users') remoteUsers = remote
         }
       } catch (e) { console.warn('Supabase load error:', table, e) }
-    }
-    // 사용자 승인상태는 원격 우선 (관리자 승인 반영)
-    const localUsers = this._data.users || []
-    for (const r of remoteUsers) {
-      const local = localUsers.find(x => x.id === r.id)
-      if (local && r.status) local.status = r.status
     }
     this.save()
   },
@@ -235,7 +227,11 @@ const Store = {
   /** 사용자 수정 */
   updateUser(id, data) {
     const idx = this._data.users.findIndex(x => x.id === id)
-    if (idx > -1) { this._data.users[idx] = { ...this._data.users[idx], ...data }; this.save() }
+    if (idx > -1) {
+      this._data.users[idx] = { ...this._data.users[idx], ...data }
+      this._sbSync('users', this._data.users[idx])
+      this.save()
+    }
   },
   /** 사용자 삭제 */
   deleteUser(id) {
