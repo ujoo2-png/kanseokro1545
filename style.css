@@ -182,6 +182,14 @@ tr:hover { background: #fafbfc; }
 .mnt-filter-btn { transition: all 0.15s; user-select: none; }
 .mnt-filter-btn:hover { opacity: 0.8; }
 
+/* Keep-alive toggle switch */
+#keepalive-toggle:checked + #keepalive-slider { background: #7C3AED; }
+#keepalive-slider::before {
+  content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; top: 3px; left: 3px; transition: .3s;
+}
+#keepalive-toggle:checked + #keepalive-slider::before { transform: translateX(22px); }
+
 /* Page visibility */
 .page { display: none; }
 .page.active { display: block; }

@@ -200,8 +200,10 @@ const Store = {
   /** 사용자 추가 */
   addUser(u) {
     const users = this.getUsers()
-    users.push({ id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...u })
+    const user = { id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...u }
+    users.push(user)
     this._data.users = users
+    this._sbSync('users', user)
     this.save()
   },
   /** 사용자 수정 */

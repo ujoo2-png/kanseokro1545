@@ -1,4 +1,4 @@
-<!-- v1.16.6 청구 생성 복지할인 직접차감+명세서 할인분리 표시, 가로스크롤 -->
+<!-- v1.16.8 복지할인 수정 + 계약기간 조회 + 접속유지 + 사용자동기화 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -459,6 +459,7 @@
         <div id="page-settings" class="page">
           <div class="tabs">
             <button class="tab active" data-stab="tab-users" onclick="switchSettingsTab('tab-users')">👥 사용자 관리</button>
+            <button class="tab" data-stab="tab-keepalive" onclick="switchSettingsTab('tab-keepalive')">🔋 접속 유지</button>
             <button class="tab" data-stab="tab-mobile" onclick="switchSettingsTab('tab-mobile')">📱 모바일 접속</button>
           </div>
 
@@ -478,6 +479,33 @@
                   <tr><td colspan="10">등록된 사용자가 없습니다.</td></tr>
                 </tbody>
               </table></div>
+            </div>
+          </div>
+
+          <div id="tab-keepalive" class="tab-content">
+            <div class="card">
+              <div class="card-header">
+                <h3>🔋 Supabase 접속 유지</h3>
+              </div>
+              <div style="padding:20px;max-width:520px">
+                <p style="font-size:13px;color:#555;line-height:1.7">
+                  Supabase 무료 요금제는 <strong>7일 동안 API 요청이 없으면 자동으로 일시중지</strong>됩니다.<br>
+                  아래 기능을 켜면 일정 간격으로 Supabase에 자동 접속하여 중단을 방지합니다.
+                </p>
+                <div style="display:flex;align-items:center;gap:12px;margin:20px 0;padding:16px;background:#f8f6ff;border-radius:12px">
+                  <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px">자동 접속 유지</div>
+                    <div style="font-size:12px;color:#888;margin-top:2px">3시간마다 Supabase에 자동으로 접속합니다</div>
+                  </div>
+                  <label style="position:relative;display:inline-block;width:48px;height:26px;cursor:pointer">
+                    <input type="checkbox" id="keepalive-toggle" onchange="toggleKeepAlive(this.checked)" style="opacity:0;width:0;height:0">
+                    <span id="keepalive-slider" style="position:absolute;inset:0;background:#ccc;border-radius:26px;transition:.3s"></span>
+                  </label>
+                </div>
+                <div style="font-size:12px;color:#999">
+                  <span id="keepalive-status">⏹ 중지됨</span>
+                </div>
+              </div>
             </div>
           </div>
 

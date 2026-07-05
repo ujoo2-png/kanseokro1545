@@ -9,7 +9,7 @@
  * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
  * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
  * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
- * v1.16.8 (2026-06) 복지할인 WELFARE 값 수정 + 청구월 기준 계약기간 포함 조회 (종료계약도 과거청구 복지 적용)
+ * v1.16.8 (2026-06) 복지할인 WELFARE 값 수정 + 청구월 기준 계약 조회 + Supabase 유저동기화 + 접속유지
  * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
  * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
  * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
@@ -645,6 +645,50 @@ function switchSettingsTab(tabId) {
       if (!saved) localStorage.setItem('kanseokro1545_mobile_url', input.value)
       updateQR()
     }
+  }
+}
+
+let _keepAliveTimer = null
+
+function toggleKeepAlive(on) {
+  localStorage.setItem('kanseokro1545_keepalive', on ? '1' : '0')
+  const status = document.getElementById('keepalive-status')
+  const slider = document.getElementById('keepalive-slider')
+  if (on) {
+    slider.style.background = '#7C3AED'
+    status.textContent = '🟢 실행 중 — 3시간마다 Supabase 자동 접속'
+    _doKeepAlive()
+    _keepAliveTimer = setInterval(_doKeepAlive, 3 * 60 * 60 * 1000)
+  } else {
+    slider.style.background = '#ccc'
+    status.textContent = '⏹ 중지됨'
+    if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+  }
+}
+
+async function _doKeepAlive() {
+  try {
+    const sb = getSupabase()
+    if (!sb) return
+    await sb.auth.getSession()
+    const status = document.getElementById('keepalive-status')
+    if (status) status.textContent = '🟢 실행 중 — 마지막 접속: ' + new Date().toLocaleTimeString('ko-KR')
+  } catch (e) {
+    console.warn('Keep-alive error:', e)
+  }
+}
+
+function initKeepAlive() {
+  const saved = localStorage.getItem('kanseokro1545_keepalive') === '1'
+  const toggle = document.getElementById('keepalive-toggle')
+  if (toggle) {
+    toggle.checked = saved
+    const slider = document.getElementById('keepalive-slider')
+    if (slider) slider.style.background = saved ? '#7C3AED' : '#ccc'
+  }
+  if (saved) {
+    _keepAliveTimer = setInterval(_doKeepAlive, 3 * 60 * 60 * 1000)
+    _doKeepAlive()
   }
 }
 
@@ -2096,8 +2140,9 @@ function fixBadPayments() {
   if (fixed > 0) {
     Store.save()
     closeModal()
-    renderAll()
-    updateStats()
+  renderAll()
+  updateStats()
+  initKeepAlive()
     alert(`${fixed}건의 수납 데이터가 수정되었습니다.`)
   }
 }
