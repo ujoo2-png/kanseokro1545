@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.11'
+const APP_VERSION = 'v1.16.12'
 
 const Store = {
   version: APP_VERSION,
@@ -142,7 +142,7 @@ const Store = {
             if (idx > -1) merged[idx] = { ...r, ...merged[idx] }
             else merged.push(r)
           }
-          this._data[table] = merged
+          this._data[table] = merged.filter(x => !skip.includes(x.id))
         }
       } catch (e) { console.warn('Supabase load error:', table, e) }
     }

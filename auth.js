@@ -82,7 +82,17 @@ function hashPw(pw) { return btoa(pw) }
 
 async function register(data) {
   const users = Store.getUsers()
-  if (users.find(u => u.username === data.username)) return { error: '이미 사용 중인 아이디입니다.' }
+  const localDup = users.find(u => u.username === data.username)
+  if (localDup) {
+    // 로컬에 있지만 Supabase에 없는 경우 = 삭제된 계정 → 통과
+    try {
+      const sb = getSupabase()
+      if (sb) {
+        const { data: dup } = await sb.from('users').select('id').eq('username', data.username)
+        if (dup && dup.length > 0) return { error: '이미 사용 중인 아이디입니다.' }
+      } else return { error: '이미 사용 중인 아이디입니다.' }
+    } catch (e) { return { error: '이미 사용 중인 아이디입니다.' } }
+  }
   if (data.email && users.find(u => u.email === data.email)) return { error: '이미 사용 중인 이메일입니다.' }
   // Supabase Auth 회원가입
   let authId = null
@@ -326,11 +336,22 @@ async function doRegister() {
   document.querySelector('#auth-page > div > div > button')?.remove()
 }
 
-function checkIdDup() {
+async function checkIdDup() {
   const id = document.getElementById('af-reg-id').value.trim()
   const msg = document.getElementById('af-reg-id-msg')
   if (!id) { msg.textContent = '아이디를 입력하세요.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
-  const ok = checkUsername(id)
+  let ok
+  const local = Store.getUsers().find(u => u.username === id)
+  if (!local) { ok = true }
+  else {
+    try {
+      const sb = getSupabase()
+      if (sb) {
+        const { data } = await sb.from('users').select('id').eq('username', id)
+        ok = !data || data.length === 0
+      } else { ok = false }
+    } catch (e) { ok = false }
+  }
   msg.textContent = ok ? '사용 가능한 아이디입니다.' : '이미 사용 중인 아이디입니다.'
   msg.style.color = ok ? '#137333' : '#d32f2f'
   msg.style.display = 'block'
