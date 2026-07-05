@@ -656,9 +656,9 @@ function toggleKeepAlive(on) {
   const slider = document.getElementById('keepalive-slider')
   if (on) {
     slider.style.background = '#7C3AED'
-    status.textContent = '🟢 실행 중 — 3시간마다 Supabase 자동 접속'
+    status.textContent = '🟢 실행 중 — 6일마다 Supabase 자동 접속'
     _doKeepAlive()
-    _keepAliveTimer = setInterval(_doKeepAlive, 3 * 60 * 60 * 1000)
+    _keepAliveTimer = setInterval(_doKeepAlive, 6 * 24 * 60 * 60 * 1000)
   } else {
     slider.style.background = '#ccc'
     status.textContent = '⏹ 중지됨'
@@ -687,7 +687,7 @@ function initKeepAlive() {
     if (slider) slider.style.background = saved ? '#7C3AED' : '#ccc'
   }
   if (saved) {
-    _keepAliveTimer = setInterval(_doKeepAlive, 3 * 60 * 60 * 1000)
+    _keepAliveTimer = setInterval(_doKeepAlive, 6 * 24 * 60 * 60 * 1000)
     _doKeepAlive()
   }
 }
