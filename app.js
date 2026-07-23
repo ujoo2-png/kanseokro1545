@@ -2331,7 +2331,117 @@ function overdueBadge(days) {
 
 /* ===== 대시보드 확장 ===== */
 
+function renderDashFloorPlan() {
+  const el = document.getElementById('dash-floor-plan')
+  const summaryEl = document.getElementById('dash-floor-summary')
+  if (!el) return
+
+  const units = Store.getUnits()
+  const contracts = Store.getContracts()
+  const maintenanceRecords = Store.getMaintenanceRecords()
+  const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
+  const in30 = new Date(today.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+
+  const floors = [
+    { label: '1층', units: ['101','102','103','104','105'] },
+    { label: '2층', units: ['201','202','203','204+205'] },
+    { label: '3층', units: ['301','302','303'] },
+  ]
+
+  let totalActive = 0, totalVacant = 0, totalExpiring = 0, totalMaintenance = 0
+
+  function getUnitStatus(unitName) {
+    const unit = units.find(u => u.name === unitName)
+    if (!unit) return { status: 'vacant', label: '미등록', tenant: '', expiry: '', rent: 0, deposit: 0 }
+
+    const contract = contracts.find(c => c.unitId === unit.id && c.status === 'active')
+    if (!contract) {
+      const ended = contracts.filter(c => c.unitId === unit.id).sort((a, b) => (b.contractEnd || '').localeCompare(a.contractEnd || ''))[0]
+      return { status: 'vacant', label: '공실', tenant: ended ? ended.tenant : '', expiry: '', rent: 0, deposit: 0 }
+    }
+
+    const mnt = maintenanceRecords.find(r => r.unitId === unit.id && (r.status === 'pending' || r.status === 'in_progress'))
+
+    const expiring = contract.contractEnd && contract.contractEnd <= in30 && contract.contractEnd >= todayStr
+    const expired = contract.contractEnd && contract.contractEnd < todayStr
+
+    let status = 'active'
+    let label = contract.tenant || '입주'
+    if (mnt) { status = 'maintenance'; label = '공사중' }
+    else if (expired) { status = 'vacant'; label = '만료' }
+    else if (expiring) { status = 'expiring'; label = '만료예정' }
+
+    return {
+      status,
+      label,
+      tenant: contract.tenant || '',
+      expiry: contract.contractEnd || '',
+      rent: contract.rent || 0,
+      deposit: contract.deposit || 0,
+      mntTitle: mnt ? mnt.title : '',
+    }
+  }
+
+  const statusColors = {
+    active:    { bg: '#e8f5e9', border: '#2d5427', text: '#1b5e20', dot: '#2d5427' },
+    vacant:    { bg: '#ffebee', border: '#c62828', text: '#b71c1c', dot: '#c62828' },
+    expiring:  { bg: '#fff8e1', border: '#f9a825', text: '#f57f17', dot: '#f9a825' },
+    maintenance:{ bg: '#fff3e0', border: '#e65100', text: '#bf360c', dot: '#e65100' },
+  }
+
+  let html = '<div style="display:flex;gap:16px;align-items:flex-start">'
+
+  floors.forEach(floor => {
+    html += `<div style="flex:1;min-width:0">`
+    html += `<div style="font-weight:700;font-size:14px;color:#1a1a2e;margin-bottom:8px;padding:6px 12px;background:#f5f5f5;border-radius:8px;text-align:center">${floor.label}</div>`
+    html += `<div style="display:flex;flex-direction:column;gap:6px">`
+
+    floor.units.forEach(name => {
+      const s = getUnitStatus(name)
+      const c = statusColors[s.status]
+      if (s.status === 'active') totalActive++
+      else if (s.status === 'vacant') totalVacant++
+      else if (s.status === 'expiring') totalExpiring++
+      else if (s.status === 'maintenance') totalMaintenance++
+
+      const tooltip = s.tenant ? `${s.tenant}\n월세: ${fmt(s.rent)}\n보증금: ${fmt(s.deposit)}${s.expiry ? '\n만료: ' + s.expiry : ''}${s.mntTitle ? '\n유지보수: ' + s.mntTitle : ''}` : name
+
+      html += `<div title="${esc(tooltip)}" style="
+        background:${c.bg};
+        border:2px solid ${c.border};
+        border-radius:8px;
+        padding:8px 10px;
+        display:flex;
+        align-items:center;
+        gap:8px;
+        cursor:pointer;
+        transition:transform .15s,box-shadow .15s;
+      " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <span style="width:10px;height:10px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px;color:${c.text}">${esc(name)}</div>
+          <div style="font-size:11px;color:${c.text};opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.label)}</div>
+        </div>
+        ${s.status === 'maintenance' ? '<span style="font-size:10px;background:#e65100;color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">공사중</span>' : ''}
+        ${s.status === 'expiring' ? '<span style="font-size:10px;background:#f9a825;color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">D-' + Math.ceil((new Date(s.expiry) - today) / 86400000) + '</span>' : ''}
+      </div>`
+    })
+
+    html += `</div></div>`
+  })
+
+  html += '</div>'
+
+  el.innerHTML = html
+
+  const total = totalActive + totalVacant + totalExpiring + totalMaintenance
+  const rate = total > 0 ? Math.round((totalActive / total) * 100) : 0
+  if (summaryEl) summaryEl.textContent = `임대율 ${rate}% (${totalActive}/${total}호)`
+}
+
 function renderDashboardExtensions() {
+  renderDashFloorPlan()
   renderTop5Arrears()
   renderCollectionChart()
   renderDashMaintenance()
