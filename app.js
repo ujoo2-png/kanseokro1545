@@ -223,6 +223,151 @@ function toggleSidebar() {
   localStorage.setItem('kanseokro1545_sidebar', app.classList.contains('sidebar-collapsed') ? 'collapsed' : '')
 }
 
+function showForcePasswordChange() {
+  const user = currentUser
+  if (!user) return
+  const overlay = document.createElement('div')
+  overlay.id = 'force-pw-modal'
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center'
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:32px;width:400px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+      <h3 style="margin:0 0 8px;color:#c62828">🔑 비밀번호 변경이 필요합니다</h3>
+      <p style="font-size:13px;color:#666;margin:0 0 20px;line-height:1.6">
+        관리자가 초기화한 임시 비밀번호로 로그인하셨습니다.<br>
+        <strong>보안을 위해 비밀번호를 변경해주세요.</strong>
+      </p>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">현재 비밀번호 (임시)</label>
+        <input type="password" id="force-pw-cur" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">새 비밀번호</label>
+        <input type="password" id="force-pw-new" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" placeholder="4자리 이상">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">새 비밀번호 확인</label>
+        <input type="password" id="force-pw-new2" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box">
+      </div>
+      <div id="force-pw-err" style="color:#d32f2f;font-size:12px;margin-bottom:12px;display:none"></div>
+      <button onclick="doForcePasswordChange()" style="width:100%;padding:12px;background:linear-gradient(135deg,#7C3AED,#EC4899);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">비밀번호 변경</button>
+    </div>`
+  document.body.appendChild(overlay)
+  document.getElementById('force-pw-cur').focus()
+}
+
+async function doForcePasswordChange() {
+  const cur = document.getElementById('force-pw-cur').value
+  const newPw = document.getElementById('force-pw-new').value
+  const newPw2 = document.getElementById('force-pw-new2').value
+  const err = document.getElementById('force-pw-err')
+  if (!cur) { err.textContent = '현재 비밀번호를 입력하세요.'; err.style.display = 'block'; return }
+  if (!newPw || newPw.length < 4) { err.textContent = '새 비밀번호는 4자리 이상 입력하세요.'; err.style.display = 'block'; return }
+  if (newPw !== newPw2) { err.textContent = '새 비밀번호가 일치하지 않습니다.'; err.style.display = 'block'; return }
+  if (newPw === cur) { err.textContent = '현재 비밀번호와 동일합니다.'; err.style.display = 'block'; return }
+  const r = Store.changePassword(currentUser.id, cur, newPw)
+  if (r.error) { err.textContent = r.error; err.style.display = 'block'; return }
+  const modal = document.getElementById('force-pw-modal')
+  if (modal) modal.remove()
+  Store.addNotification({ type: 'password_changed', text: `${currentUser.name}님이 비밀번호를 변경했습니다.`, createdAt: new Date().toISOString() })
+  alert('비밀번호가 변경되었습니다.')
+}
+
+function showMyProfile() {
+  const user = currentUser
+  if (!user) return
+  const overlay = document.createElement('div')
+  overlay.id = 'profile-modal'
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center'
+  const lastPwChange = user.lastPasswordChange ? new Date(user.lastPasswordChange).toLocaleDateString('ko-KR') : '기록 없음'
+  const daysSincePwChange = user.lastPasswordChange ? Math.floor((Date.now() - new Date(user.lastPasswordChange).getTime()) / 86400000) : -1
+  const pwExpiryWarning = daysSincePwChange >= 90 ? `<div style="background:#fff3e0;border:1px solid #e65100;border-radius:8px;padding:10px 14px;font-size:12px;color:#e65100;margin-bottom:16px">
+    ⚠️ 비밀번호를 ${daysSincePwChange}일 전에 변경했습니다. 보안을 위해 변경을 권장합니다.
+  </div>` : ''
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:32px;width:440px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h3 style="margin:0">내 정보 관리</h3>
+        <button onclick="closeProfileModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;padding:4px 8px">&times;</button>
+      </div>
+      ${pwExpiryWarning}
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:16px;background:#f8f9fa;border-radius:12px">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#EC4899);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:700">${esc((user.name || '?')[0])}</div>
+        <div>
+          <div style="font-weight:700;font-size:16px">${esc(user.name)}</div>
+          <div style="font-size:12px;color:#888">@${esc(user.username)} · ${user.role === 'admin' ? '관리자' : user.role === 'manager' ? '매니저' : '입주자'}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#888;margin-bottom:16px">가입일: ${user.createdAt ? new Date(user.createdAt).toLocaleDateString('ko-KR') : '-'} · 비밀번호 변경: ${lastPwChange}</div>
+      <h4 style="font-size:13px;margin:0 0 8px;color:#555">个人信息 수정</h4>
+      <div style="margin-bottom:8px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">이름</label>
+        <input type="text" id="prof-name" value="${esc(user.name || '')}" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">이메일</label>
+        <input type="email" id="prof-email" value="${esc(user.email || '')}" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">연락처</label>
+        <input type="text" id="prof-phone" value="${esc(user.phone || '')}" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">
+      </div>
+      <div id="prof-info-msg" style="font-size:12px;margin-bottom:12px;display:none"></div>
+      <button onclick="saveMyProfile()" style="width:100%;padding:10px;background:#2d5427;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:20px">정보 저장</button>
+      <h4 style="font-size:13px;margin:0 0 8px;color:#555;border-top:1px solid #eee;padding-top:16px">비밀번호 변경</h4>
+      <div style="margin-bottom:8px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">현재 비밀번호</label>
+        <input type="password" id="prof-pw-cur" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">새 비밀번호</label>
+        <input type="password" id="prof-pw-new" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" placeholder="4자리 이상">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:4px">새 비밀번호 확인</label>
+        <input type="password" id="prof-pw-new2" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">
+      </div>
+      <div id="prof-pw-msg" style="font-size:12px;margin-bottom:12px;display:none"></div>
+      <button onclick="changeMyPassword()" style="width:100%;padding:10px;background:#7C3AED;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">비밀번호 변경</button>
+    </div>`
+  document.body.appendChild(overlay)
+}
+
+function closeProfileModal() {
+  const m = document.getElementById('profile-modal')
+  if (m) m.remove()
+}
+
+function saveMyProfile() {
+  const name = document.getElementById('prof-name').value.trim()
+  const email = document.getElementById('prof-email').value.trim()
+  const phone = document.getElementById('prof-phone').value.trim()
+  const msg = document.getElementById('prof-info-msg')
+  if (!name) { msg.textContent = '이름을 입력하세요.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  if (!email) { msg.textContent = '이메일을 입력하세요.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  const r = Store.updateProfile(currentUser.id, { name, email, phone })
+  if (r.error) { msg.textContent = r.error; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  currentUser = Store.findUserByUsername(currentUser.username)
+  msg.textContent = '저장되었습니다.'; msg.style.color = '#2d5427'; msg.style.display = 'block'
+  document.getElementById('user-info').textContent = currentUser.name + (currentUser.role === 'admin' ? ' (관리자)' : currentUser.role === 'manager' ? ' (매니저)' : ' (입주자)')
+}
+
+function changeMyPassword() {
+  const cur = document.getElementById('prof-pw-cur').value
+  const newPw = document.getElementById('prof-pw-new').value
+  const newPw2 = document.getElementById('prof-pw-new2').value
+  const msg = document.getElementById('prof-pw-msg')
+  if (!cur) { msg.textContent = '현재 비밀번호를 입력하세요.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  if (!newPw || newPw.length < 4) { msg.textContent = '새 비밀번호는 4자리 이상 입력하세요.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  if (newPw !== newPw2) { msg.textContent = '새 비밀번호가 일치하지 않습니다.'; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  const r = Store.changePassword(currentUser.id, cur, newPw)
+  if (r.error) { msg.textContent = r.error; msg.style.color = '#d32f2f'; msg.style.display = 'block'; return }
+  Store.addNotification({ type: 'password_changed', text: `${currentUser.name}님이 비밀번호를 변경했습니다.`, createdAt: new Date().toISOString() })
+  msg.textContent = '비밀번호가 변경되었습니다.'; msg.style.color = '#2d5427'; msg.style.display = 'block'
+  document.getElementById('prof-pw-cur').value = ''
+  document.getElementById('prof-pw-new').value = ''
+  document.getElementById('prof-pw-new2').value = ''
+}
+
 function navigateTo(page, subTab) {
   const link = document.querySelector(`#nav a[data-page="${page}"]`)
   if (link) link.click()
@@ -696,16 +841,31 @@ function switchSettingsTab(tabId) {
   }
 }
 
+let _resetReqFilter = 'all'
+
+function filterResetReqs(filter) {
+  _resetReqFilter = filter
+  document.querySelectorAll('#tab-reset-requests .btn').forEach(b => {
+    b.style.background = '#e8eaed'
+    b.style.color = '#555'
+  })
+  const active = document.getElementById('rr-filter-' + filter)
+  if (active) { active.style.background = '#2d5427'; active.style.color = '#fff' }
+  renderPasswordResetRequests()
+}
+
 function renderPasswordResetRequests() {
   const tbody = document.getElementById('reset-req-tbody')
   const countEl = document.getElementById('reset-req-count')
   if (!tbody) return
-  const requests = Store.getPasswordResetRequests().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  let requests = Store.getPasswordResetRequests().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
   const pending = requests.filter(r => r.status === 'pending')
   if (countEl) {
     if (pending.length > 0) { countEl.textContent = pending.length; countEl.style.display = 'inline' }
     else { countEl.style.display = 'none' }
   }
+  if (_resetReqFilter === 'pending') requests = requests.filter(r => r.status === 'pending')
+  else if (_resetReqFilter === 'resolved') requests = requests.filter(r => r.status !== 'pending')
   if (!requests.length) {
     tbody.innerHTML = '<tr><td colspan="6">요청이 없습니다.</td></tr>'
     return
@@ -714,16 +874,17 @@ function renderPasswordResetRequests() {
     const statusMap = { pending: '대기', approved: '승인완료', rejected: '거절' }
     const colorMap = { pending: '#e65100', approved: '#2d5427', rejected: '#c62828' }
     const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : '-'
+    const resolved = r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString('ko-KR') : ''
     return `<tr>
       <td>${date}</td>
       <td>${esc(r.name || '?')}</td>
       <td>${esc(r.username || '?')}</td>
       <td>${esc(r.email || '?')}</td>
-      <td><span style="color:${colorMap[r.status]};font-weight:600">${statusMap[r.status]}</span></td>
+      <td><span style="color:${colorMap[r.status]};font-weight:600">${statusMap[r.status]}</span>${resolved ? `<br><span style="font-size:11px;color:#888">${resolved}</span>` : ''}</td>
       <td>${r.status === 'pending' ? `
         <button class="btn" style="padding:3px 8px;font-size:11px;background:#2d5427;color:#fff;margin-right:4px" onclick="approveResetRequest(${r.id})">승인</button>
         <button class="btn" style="padding:3px 8px;font-size:11px;background:#c62828;color:#fff" onclick="rejectResetRequest(${r.id})">거절</button>
-      ` : (r.status === 'approved' && r.tempPassword ? `<span style="font-size:12px;color:#888">임시비밀번호: <strong style="color:#2d5427">${esc(r.tempPassword)}</strong></span>` : '')}</td>
+      ` : (r.status === 'approved' && r.tempPassword ? `<span style="font-size:12px;color:#888">임시PW: <strong style="color:#2d5427">${esc(r.tempPassword)}</strong></span>` : '')}</td>
     </tr>`
   }).join('')
 }
@@ -2708,6 +2869,18 @@ function renderDashAlerts() {
   const pendingResets = Store.getPasswordResetRequests().filter(r => r.status === 'pending')
   pendingResets.forEach(r => {
     alerts.push({ type: 'warning', icon: '🔑', text: `${r.name} 비밀번호 초기화 요청`, link: 'settings', subTab: 'tab-reset-requests' })
+  })
+
+  const users = Store.getUsers()
+  users.filter(u => u.status === 'active').forEach(u => {
+    if (u.mustChangePassword) {
+      alerts.push({ type: 'warning', icon: '🔑', text: `${u.name} 비밀번호 변경 대기중`, link: 'settings', subTab: 'tab-reset-requests' })
+    } else if (u.lastPasswordChange) {
+      const days = Math.floor((today - new Date(u.lastPasswordChange)) / 86400000)
+      if (days >= 90) {
+        alerts.push({ type: 'info', icon: '🔑', text: `${u.name} 비밀번호 ${days}일 경과 (변경 권장)`, link: 'settings', subTab: 'tab-users' })
+      }
+    }
   })
 
   alerts.sort((a, b) => {

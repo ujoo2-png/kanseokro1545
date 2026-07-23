@@ -140,7 +140,7 @@ async function login(username, password) {
   }
 
   setSession(user, sbSession)
-  return { ok: true, user }
+  return { ok: true, user, mustChangePassword: !!user.mustChangePassword }
 }
 
 async function logout() {
@@ -324,6 +324,9 @@ async function doLogin() {
   renderAll()
   updateStats()
   if (typeof initKeepAlive === 'function') initKeepAlive()
+  if (r.mustChangePassword) {
+    setTimeout(() => showForcePasswordChange(), 300)
+  }
 }
 
 async function doRegister() {

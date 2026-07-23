@@ -37,7 +37,7 @@
           <h2 id="page-title">대시보드</h2>
         </div>
         <div class="topbar-right">
-          <span id="user-info">로그인 필요</span>
+          <span id="user-info" onclick="showMyProfile()" style="cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background=''">로그인 필요</span>
           <button id="login-btn-top" onclick="showAuthModal('login')" style="display:none">로그인</button>
           <button id="logout-btn-top" onclick="doLogoutUI()" style="display:none">로그아웃</button>
         </div>
@@ -509,6 +509,11 @@
             <div class="card">
               <div class="card-header">
                 <h3>🔑 비밀번호 초기화 요청</h3>
+                <div style="display:flex;gap:6px">
+                  <button class="btn" style="padding:4px 10px;font-size:12px;background:#2d5427;color:#fff" onclick="filterResetReqs('all')" id="rr-filter-all">전체</button>
+                  <button class="btn" style="padding:4px 10px;font-size:12px;background:#e8eaed;color:#555" onclick="filterResetReqs('pending')" id="rr-filter-pending">대기</button>
+                  <button class="btn" style="padding:4px 10px;font-size:12px;background:#e8eaed;color:#555" onclick="filterResetReqs('resolved')" id="rr-filter-resolved">완료</button>
+                </div>
               </div>
               <div class="table-wrap"><table class="table-dense">
                 <thead><tr><th>요청일</th><th>이름</th><th>아이디</th><th>이메일</th><th>상태</th><th>관리</th></tr></thead>

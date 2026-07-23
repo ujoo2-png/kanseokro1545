@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.17.2
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.17.3'
+const APP_VERSION = 'v1.18.0'
 
 const Store = {
   version: APP_VERSION,
@@ -293,7 +293,7 @@ const Store = {
     req.resolvedAt = new Date().toISOString()
     const user = this.findUserByUsername(req.username)
     if (user) {
-      this.updateUser(user.id, { password: btoa(tempPw) })
+      this.updateUser(user.id, { password: btoa(tempPw), mustChangePassword: true })
     }
     this.save()
     return tempPw
@@ -306,6 +306,25 @@ const Store = {
     req.resolvedAt = new Date().toISOString()
     this.save()
     return true
+  },
+  /** 비밀번호 변경 */
+  changePassword(userId, currentPw, newPw) {
+    const user = (this._data.users || []).find(u => u.id === userId)
+    if (!user) return { error: '사용자를 찾을 수 없습니다.' }
+    if (user.password !== btoa(currentPw)) return { error: '현재 비밀번호가 일치하지 않습니다.' }
+    this.updateUser(userId, { password: btoa(newPw), mustChangePassword: false, lastPasswordChange: new Date().toISOString() })
+    return { ok: true }
+  },
+  /** 프로필 수정 */
+  updateProfile(userId, data) {
+    const user = (this._data.users || []).find(u => u.id === userId)
+    if (!user) return { error: '사용자를 찾을 수 없습니다.' }
+    if (data.email && data.email !== user.email) {
+      const dup = this.findUserByEmail(data.email)
+      if (dup && dup.id !== userId) return { error: '이미 사용 중인 이메일입니다.' }
+    }
+    this.updateUser(userId, data)
+    return { ok: true }
   },
 
   // Buildings
