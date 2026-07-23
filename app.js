@@ -223,9 +223,12 @@ function toggleSidebar() {
   localStorage.setItem('kanseokro1545_sidebar', app.classList.contains('sidebar-collapsed') ? 'collapsed' : '')
 }
 
-function navigateTo(page) {
+function navigateTo(page, subTab) {
   const link = document.querySelector(`#nav a[data-page="${page}"]`)
   if (link) link.click()
+  if (page === 'settings' && subTab) {
+    setTimeout(() => switchSettingsTab(subTab), 50)
+  }
 }
 
 function goToUnit(unitName) {
@@ -681,6 +684,7 @@ function switchSettingsTab(tabId) {
   document.querySelector(`#page-settings .tab[data-stab="${tabId}"]`).classList.add('active')
   document.getElementById(tabId).classList.add('active')
   if (tabId === 'tab-users') renderUsers()
+  if (tabId === 'tab-reset-requests') renderPasswordResetRequests()
   if (tabId === 'tab-mobile') {
     const saved = localStorage.getItem('kanseokro1545_mobile_url')
     const input = document.getElementById('mobile-url')
@@ -690,6 +694,53 @@ function switchSettingsTab(tabId) {
       updateQR()
     }
   }
+}
+
+function renderPasswordResetRequests() {
+  const tbody = document.getElementById('reset-req-tbody')
+  const countEl = document.getElementById('reset-req-count')
+  if (!tbody) return
+  const requests = Store.getPasswordResetRequests().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  const pending = requests.filter(r => r.status === 'pending')
+  if (countEl) {
+    if (pending.length > 0) { countEl.textContent = pending.length; countEl.style.display = 'inline' }
+    else { countEl.style.display = 'none' }
+  }
+  if (!requests.length) {
+    tbody.innerHTML = '<tr><td colspan="6">요청이 없습니다.</td></tr>'
+    return
+  }
+  tbody.innerHTML = requests.map(r => {
+    const statusMap = { pending: '대기', approved: '승인완료', rejected: '거절' }
+    const colorMap = { pending: '#e65100', approved: '#2d5427', rejected: '#c62828' }
+    const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : '-'
+    return `<tr>
+      <td>${date}</td>
+      <td>${esc(r.name || '?')}</td>
+      <td>${esc(r.username || '?')}</td>
+      <td>${esc(r.email || '?')}</td>
+      <td><span style="color:${colorMap[r.status]};font-weight:600">${statusMap[r.status]}</span></td>
+      <td>${r.status === 'pending' ? `
+        <button class="btn" style="padding:3px 8px;font-size:11px;background:#2d5427;color:#fff;margin-right:4px" onclick="approveResetRequest(${r.id})">승인</button>
+        <button class="btn" style="padding:3px 8px;font-size:11px;background:#c62828;color:#fff" onclick="rejectResetRequest(${r.id})">거절</button>
+      ` : (r.status === 'approved' && r.tempPassword ? `<span style="font-size:12px;color:#888">임시비밀번호: <strong style="color:#2d5427">${esc(r.tempPassword)}</strong></span>` : '')}</td>
+    </tr>`
+  }).join('')
+}
+
+function approveResetRequest(id) {
+  const tempPw = Store.approvePasswordResetRequest(id)
+  if (tempPw) {
+    renderPasswordResetRequests()
+    renderDashAlerts()
+  }
+}
+
+function rejectResetRequest(id) {
+  if (!confirm('이 요청을 거절하시겠습니까?')) return
+  Store.rejectPasswordResetRequest(id)
+  renderPasswordResetRequests()
+  renderDashAlerts()
 }
 
 let _keepAliveTimer = null
@@ -2654,6 +2705,11 @@ function renderDashAlerts() {
     }
   })
 
+  const pendingResets = Store.getPasswordResetRequests().filter(r => r.status === 'pending')
+  pendingResets.forEach(r => {
+    alerts.push({ type: 'warning', icon: '🔑', text: `${r.name} 비밀번호 초기화 요청`, link: 'settings', subTab: 'tab-reset-requests' })
+  })
+
   alerts.sort((a, b) => {
     const order = { danger: 0, warning: 1, info: 2 }
     return (order[a.type] ?? 9) - (order[b.type] ?? 9)
@@ -2670,8 +2726,16 @@ function renderDashAlerts() {
   const typeBg = { danger: '#ffebee', warning: '#fff3e0', info: '#e3f2fd' }
 
   if (countEl) countEl.textContent = `${alerts.length}건`
+
+  const resetBadge = document.getElementById('reset-req-count')
+  if (resetBadge) {
+    const pendingCount = Store.getPasswordResetRequests().filter(r => r.status === 'pending').length
+    if (pendingCount > 0) { resetBadge.textContent = pendingCount; resetBadge.style.display = 'inline' }
+    else { resetBadge.style.display = 'none' }
+  }
+
   el.innerHTML = alerts.slice(0, 8).map(a =>
-    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5;cursor:pointer" onclick="navigateTo('${a.link}')" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5;cursor:pointer" onclick="navigateTo('${a.link}','${a.subTab || ''}')" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
       <span style="font-size:14px">${a.icon}</span>
       <span style="flex:1;color:${typeColors[a.type] || '#333'}">${esc(a.text)}</span>
     </div>`
@@ -2754,7 +2818,7 @@ function renderDashMonthlyCheck() {
   }
 
   el.innerHTML = items.map(item =>
-    `<div onclick="navigateTo('${item.link}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f5f5f5;cursor:pointer" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+    `<div onclick="navigateTo('${item.link}','${item.subTab || ''}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f5f5f5;cursor:pointer" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
       <span style="font-size:16px">${item.icon}</span>
       <div style="flex:1">
         <span style="color:${item.color};font-weight:600">${item.text}</span>

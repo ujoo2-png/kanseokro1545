@@ -161,9 +161,16 @@ function findId(email) {
 }
 
 function findPassword(name, email) {
-  // 보안: 계정 존재 여부와 관계없이 동일한 메시지 반환
-  // 정보 노출 방지를 위해 항상 성공 응답
-  return { ok: true }
+  const user = Store.findUserByEmail(email)
+  if (!user || user.name !== name) {
+    return { ok: true }
+  }
+  const pending = Store.getPasswordResetRequests().find(r => r.username === user.username && r.status === 'pending')
+  if (pending) {
+    return { ok: true, pending: true }
+  }
+  Store.addPasswordResetRequest({ username: user.username, name: user.name, email: user.email })
+  return { ok: true, requested: true }
 }
 
 function isAdmin() { return currentUser && currentUser.role === 'admin' }
@@ -381,7 +388,12 @@ function doFindPw() {
   if (!email) { rs.textContent = '이메일을 입력하세요.'; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
   const r = findPassword(name, email)
   if (r.error) { rs.textContent = r.error; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
-  rs.innerHTML = '관리자에게 비밀번호 초기화를 요청하세요.'
+  if (r.pending) {
+    rs.innerHTML = '이미 초기화 요청이 진행중입니다. 관리자 승인을 기다려주세요.'
+    rs.style.color = '#e65100'; rs.style.display = 'block'
+    return
+  }
+  rs.innerHTML = '초기화 요청이 접수되었습니다. 관리자 승인 후 새 비밀번호로 로그인할 수 있습니다.'
   rs.style.color = '#137333'; rs.style.display = 'block'
 }
 

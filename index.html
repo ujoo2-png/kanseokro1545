@@ -478,6 +478,7 @@
         <div id="page-settings" class="page">
           <div class="tabs">
             <button class="tab active" data-stab="tab-users" onclick="switchSettingsTab('tab-users')">👥 사용자 관리</button>
+            <button class="tab" data-stab="tab-reset-requests" onclick="switchSettingsTab('tab-reset-requests')">🔑 비밀번호 초기화 <span id="reset-req-count" style="background:#c62828;color:#fff;border-radius:99px;padding:0 6px;margin-left:4px;font-size:11px;display:none">0</span></button>
             <button class="tab" data-stab="tab-keepalive" onclick="switchSettingsTab('tab-keepalive')">🔋 접속 유지</button>
             <button class="tab" data-stab="tab-mobile" onclick="switchSettingsTab('tab-mobile')">📱 모바일 접속</button>
           </div>
@@ -499,6 +500,20 @@
                 <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="user-tbody" onchange="_chkAll('user-tbody')"></th><th>아이디</th><th>이름</th><th>이메일</th><th>연락처</th><th>권한</th><th>세대</th><th>상태</th><th>가입일</th><th>관리</th></tr></thead>
                 <tbody id="user-tbody">
                   <tr><td colspan="10">등록된 사용자가 없습니다.</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+
+          <div id="tab-reset-requests" class="tab-content">
+            <div class="card">
+              <div class="card-header">
+                <h3>🔑 비밀번호 초기화 요청</h3>
+              </div>
+              <div class="table-wrap"><table class="table-dense">
+                <thead><tr><th>요청일</th><th>이름</th><th>아이디</th><th>이메일</th><th>상태</th><th>관리</th></tr></thead>
+                <tbody id="reset-req-tbody">
+                  <tr><td colspan="6">요청이 없습니다.</td></tr>
                 </tbody>
               </table></div>
             </div>

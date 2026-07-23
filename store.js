@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.17.2
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.17.2'
+const APP_VERSION = 'v1.17.3'
 
 const Store = {
   version: APP_VERSION,
@@ -119,7 +119,7 @@ const Store = {
   },
 
   _ensureArrays() {
-    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices','maintenanceCategories','maintenanceRecords','notifications']
+    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices','maintenanceCategories','maintenanceRecords','notifications','passwordResetRequests']
     for (const t of tables) if (!this._data[t]) this._data[t] = []
   },
 
@@ -208,6 +208,7 @@ const Store = {
       maintenanceCategories: [],
       maintenanceRecords: [],
       notifications: [],
+      passwordResetRequests: [],
     }
     this.save()
   },
@@ -270,6 +271,41 @@ const Store = {
   /** phone으로 사용자 찾기 */
   findUserByPhone(phone) {
     return (this._data.users || []).find(u => u.phone === phone)
+  },
+
+  // Password Reset Requests
+  /** @returns {Array} 비밀번호 초기화 요청 목록 */
+  getPasswordResetRequests() { return this._data.passwordResetRequests || [] },
+  /** 비밀번호 초기화 요청 추가 */
+  addPasswordResetRequest(req) {
+    const request = { id: this._nextId(), status: 'pending', createdAt: new Date().toISOString(), ...req }
+    this._data.passwordResetRequests.push(request)
+    this.save()
+    return request
+  },
+  /** 비밀번호 초기화 요청 승인 (임시 비밀번호 반환) */
+  approvePasswordResetRequest(id) {
+    const req = (this._data.passwordResetRequests || []).find(r => r.id === id)
+    if (!req || req.status !== 'pending') return null
+    const tempPw = 'pw' + Math.random().toString(36).slice(-8)
+    req.status = 'approved'
+    req.tempPassword = tempPw
+    req.resolvedAt = new Date().toISOString()
+    const user = this.findUserByUsername(req.username)
+    if (user) {
+      this.updateUser(user.id, { password: btoa(tempPw) })
+    }
+    this.save()
+    return tempPw
+  },
+  /** 비밀번호 초기화 요청 거절 */
+  rejectPasswordResetRequest(id) {
+    const req = (this._data.passwordResetRequests || []).find(r => r.id === id)
+    if (!req || req.status !== 'pending') return false
+    req.status = 'rejected'
+    req.resolvedAt = new Date().toISOString()
+    this.save()
+    return true
   },
 
   // Buildings
