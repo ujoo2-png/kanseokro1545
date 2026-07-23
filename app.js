@@ -223,6 +223,20 @@ function toggleSidebar() {
   localStorage.setItem('kanseokro1545_sidebar', app.classList.contains('sidebar-collapsed') ? 'collapsed' : '')
 }
 
+function navigateTo(page) {
+  const link = document.querySelector(`#nav a[data-page="${page}"]`)
+  if (link) link.click()
+}
+
+function goToUnit(unitName) {
+  navigateTo('building')
+  setTimeout(() => {
+    switchBuildingTab('tab-units')
+    const search = document.getElementById('unit-search')
+    if (search) { search.value = unitName; renderUnits() }
+  }, 50)
+}
+
 /* Navigation — nav a 클릭 시 페이지 전환 + 활성화 */
 function setupNavigation() {
   document.querySelectorAll('#nav a').forEach(a => {
@@ -2337,77 +2351,114 @@ function renderDashFloorPlan() {
   if (!el) return
 
   const units = Store.getUnits()
+  if (!units.length) { el.innerHTML = '<span style="color:#888">등록된 세대가 없습니다.</span>'; return }
+
   const contracts = Store.getContracts()
   const maintenanceRecords = Store.getMaintenanceRecords()
+  const meters = Store.getMeters()
+  const bills = Store.getBills()
+  const payments = Store.getPayments()
   const today = new Date()
   const todayStr = today.toISOString().slice(0, 10)
   const in30 = new Date(today.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+  const thisYm = todayStr.slice(0, 7)
 
-  const floors = [
-    { label: '1층', units: ['101','102','103','104','105'] },
-    { label: '2층', units: ['201','202','203','204+205'] },
-    { label: '3층', units: ['301','302','303'] },
-  ]
+  const unitMap = Store.getUnitMap()
 
-  let totalActive = 0, totalVacant = 0, totalExpiring = 0, totalMaintenance = 0
-
-  function getUnitStatus(unitName) {
-    const unit = units.find(u => u.name === unitName)
-    if (!unit) return { status: 'vacant', label: '미등록', tenant: '', expiry: '', rent: 0, deposit: 0 }
-
+  function getUnitStatus(unit) {
     const contract = contracts.find(c => c.unitId === unit.id && c.status === 'active')
-    if (!contract) {
-      const ended = contracts.filter(c => c.unitId === unit.id).sort((a, b) => (b.contractEnd || '').localeCompare(a.contractEnd || ''))[0]
-      return { status: 'vacant', label: '공실', tenant: ended ? ended.tenant : '', expiry: '', rent: 0, deposit: 0 }
-    }
-
     const mnt = maintenanceRecords.find(r => r.unitId === unit.id && (r.status === 'pending' || r.status === 'in_progress'))
 
-    const expiring = contract.contractEnd && contract.contractEnd <= in30 && contract.contractEnd >= todayStr
-    const expired = contract.contractEnd && contract.contractEnd < todayStr
-
     let status = 'active'
-    let label = contract.tenant || '입주'
-    if (mnt) { status = 'maintenance'; label = '공사중' }
-    else if (expired) { status = 'vacant'; label = '만료' }
-    else if (expiring) { status = 'expiring'; label = '만료예정' }
+    let label = ''
+    let tenant = '', expiry = '', rent = 0, deposit = 0, mntTitle = '', unmetered = false, unpaid = 0, unpaidCount = 0
 
-    return {
-      status,
-      label,
-      tenant: contract.tenant || '',
-      expiry: contract.contractEnd || '',
-      rent: contract.rent || 0,
-      deposit: contract.deposit || 0,
-      mntTitle: mnt ? mnt.title : '',
+    if (!contract) {
+      status = 'vacant'
+      label = '공실'
+    } else {
+      tenant = contract.tenant || ''
+      expiry = contract.contractEnd || ''
+      rent = contract.rent || 0
+      deposit = contract.deposit || 0
+
+      const expiring = expiry && expiry <= in30 && expiry >= todayStr
+      const expired = expiry && expiry < todayStr
+
+      if (expired) { status = 'vacant'; label = '만료' }
+      else if (expiring) { status = 'expiring'; label = '만료예정' }
+      else { status = 'active'; label = tenant || '입주' }
     }
+
+    if (mnt) {
+      status = 'maintenance'
+      mntTitle = mnt.title || ''
+      label = '공사중'
+    }
+
+    const unitMeters = meters.filter(m => m.unitId === unit.id)
+    const lastMeter = unitMeters.sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))).pop()
+    if (!lastMeter || lastMeter.date < thisYm + '-01') {
+      if (contract) unmetered = true
+    }
+
+    const unitBills = bills.filter(b => b.unitId === unit.id && b.status !== 'paid')
+    unpaidCount = unitBills.length
+    unpaid = unitBills.reduce((s, b) => {
+      const paid = payments.filter(p => p.billId === b.id).reduce((ps, p) => ps + p.amount, 0)
+      return s + (b.total - paid)
+    }, 0)
+
+    return { status, label, tenant, expiry, rent, deposit, mntTitle, unmetered, unpaid, unpaidCount }
   }
 
+  const floorMap = {}
+  units.forEach(u => {
+    const floorNum = String(u.name || '').charAt(0)
+    if (!floorNum || isNaN(floorNum)) return
+    if (!floorMap[floorNum]) floorMap[floorNum] = []
+    floorMap[floorNum].push(u)
+  })
+
+  const sortedFloors = Object.keys(floorMap).sort()
+
   const statusColors = {
-    active:    { bg: '#e8f5e9', border: '#2d5427', text: '#1b5e20', dot: '#2d5427' },
-    vacant:    { bg: '#ffebee', border: '#c62828', text: '#b71c1c', dot: '#c62828' },
-    expiring:  { bg: '#fff8e1', border: '#f9a825', text: '#f57f17', dot: '#f9a825' },
+    active:     { bg: '#e8f5e9', border: '#2d5427', text: '#1b5e20', dot: '#2d5427' },
+    vacant:     { bg: '#ffebee', border: '#c62828', text: '#b71c1c', dot: '#c62828' },
+    expiring:   { bg: '#fff8e1', border: '#f9a825', text: '#f57f17', dot: '#f9a825' },
     maintenance:{ bg: '#fff3e0', border: '#e65100', text: '#bf360c', dot: '#e65100' },
   }
 
+  let totalActive = 0, totalVacant = 0, totalExpiring = 0, totalMaintenance = 0, totalUnmetered = 0
+
   let html = '<div style="display:flex;gap:16px;align-items:flex-start">'
 
-  floors.forEach(floor => {
+  sortedFloors.forEach(floorNum => {
+    const floorUnits = floorMap[floorNum].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     html += `<div style="flex:1;min-width:0">`
-    html += `<div style="font-weight:700;font-size:14px;color:#1a1a2e;margin-bottom:8px;padding:6px 12px;background:#f5f5f5;border-radius:8px;text-align:center">${floor.label}</div>`
+    html += `<div style="font-weight:700;font-size:14px;color:#1a1a2e;margin-bottom:8px;padding:6px 12px;background:#f5f5f5;border-radius:8px;text-align:center">${floorNum}층</div>`
     html += `<div style="display:flex;flex-direction:column;gap:6px">`
 
-    floor.units.forEach(name => {
-      const s = getUnitStatus(name)
+    floorUnits.forEach(unit => {
+      const s = getUnitStatus(unit)
       const c = statusColors[s.status]
       if (s.status === 'active') totalActive++
       else if (s.status === 'vacant') totalVacant++
       else if (s.status === 'expiring') totalExpiring++
       else if (s.status === 'maintenance') totalMaintenance++
+      if (s.unmetered) totalUnmetered++
 
-      const tooltip = s.tenant ? `${s.tenant}\n월세: ${fmt(s.rent)}\n보증금: ${fmt(s.deposit)}${s.expiry ? '\n만료: ' + s.expiry : ''}${s.mntTitle ? '\n유지보수: ' + s.mntTitle : ''}` : name
+      const tooltips = []
+      if (s.tenant) tooltips.push(`세입자: ${s.tenant}`)
+      if (s.rent) tooltips.push(`월세: ${fmt(s.rent)}`)
+      if (s.deposit) tooltips.push(`보증금: ${fmt(s.deposit)}`)
+      if (s.expiry) tooltips.push(`만료: ${s.expiry}`)
+      if (s.mntTitle) tooltips.push(`유지보수: ${s.mntTitle}`)
+      if (s.unpaid > 0) tooltips.push(`미납: ${fmt(s.unpaid)} (${s.unpaidCount}건)`)
+      if (s.unmetered) tooltips.push('⚠ 미검침')
+      const tooltip = tooltips.join('\n') || unit.name
 
-      html += `<div title="${esc(tooltip)}" style="
+      html += `<div onclick="goToUnit('${esc(unit.name)}')" title="${esc(tooltip)}" style="
         background:${c.bg};
         border:2px solid ${c.border};
         border-radius:8px;
@@ -2420,11 +2471,13 @@ function renderDashFloorPlan() {
       " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
         <span style="width:10px;height:10px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;color:${c.text}">${esc(name)}</div>
+          <div style="font-weight:700;font-size:13px;color:${c.text}">${esc(unit.name)}</div>
           <div style="font-size:11px;color:${c.text};opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.label)}</div>
         </div>
         ${s.status === 'maintenance' ? '<span style="font-size:10px;background:#e65100;color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">공사중</span>' : ''}
         ${s.status === 'expiring' ? '<span style="font-size:10px;background:#f9a825;color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">D-' + Math.ceil((new Date(s.expiry) - today) / 86400000) + '</span>' : ''}
+        ${s.unpaid > 0 ? '<span style="font-size:10px;background:#c62828;color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">' + fmt(s.unpaid) + '</span>' : ''}
+        ${s.unmetered ? '<span style="font-size:10px;background:#1565c0;color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap">미검침</span>' : ''}
       </div>`
     })
 
@@ -2437,11 +2490,18 @@ function renderDashFloorPlan() {
 
   const total = totalActive + totalVacant + totalExpiring + totalMaintenance
   const rate = total > 0 ? Math.round((totalActive / total) * 100) : 0
-  if (summaryEl) summaryEl.textContent = `임대율 ${rate}% (${totalActive}/${total}호)`
+  const parts = [`임대율 ${rate}%`, `${totalActive}호 입주`]
+  if (totalVacant) parts.push(`<span style="color:#c62828">${totalVacant}호 공실</span>`)
+  if (totalExpiring) parts.push(`<span style="color:#f57f17">${totalExpiring}호 만료예정</span>`)
+  if (totalMaintenance) parts.push(`<span style="color:#e65100">${totalMaintenance}호 공사중</span>`)
+  if (totalUnmetered) parts.push(`<span style="color:#1565c0">${totalUnmetered}호 미검침</span>`)
+  if (summaryEl) summaryEl.innerHTML = parts.join(' · ')
 }
 
 function renderDashboardExtensions() {
   renderDashFloorPlan()
+  renderDashAlerts()
+  renderDashMonthlyCheck()
   renderTop5Arrears()
   renderCollectionChart()
   renderDashMaintenance()
@@ -2522,6 +2582,186 @@ function renderDashMaintenance() {
       <span style="color:${r.status === 'in_progress' ? '#1565c0' : '#e65100'}">${statusLabel}</span>
     </div>`
   }).join('')
+}
+
+function renderDashAlerts() {
+  const el = document.getElementById('dash-alerts')
+  const countEl = document.getElementById('dash-alert-count')
+  const card = document.getElementById('dash-alerts-card')
+  if (!el) return
+
+  const alerts = []
+  const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
+  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10)
+  const in30 = new Date(today.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+  const thisYm = todayStr.slice(0, 7)
+  const units = Store.getUnits()
+  const contracts = Store.getContracts()
+  const bills = Store.getBills()
+  const payments = Store.getPayments()
+  const meters = Store.getMeters()
+  const mntRecords = Store.getMaintenanceRecords()
+
+  contracts.filter(c => c.status === 'active').forEach(c => {
+    const unit = units.find(u => u.id === c.unitId)
+    if (!unit || !c.contractEnd) return
+    if (c.contractEnd < todayStr) {
+      alerts.push({ type: 'danger', icon: '🔴', text: `${unit.name} 계약 만료됨 (${c.contractEnd})`, link: 'building' })
+    } else if (c.contractEnd <= in7) {
+      alerts.push({ type: 'warning', icon: '🟡', text: `${unit.name} 계약 7일 내 만료 (${c.contractEnd})`, link: 'building' })
+    } else if (c.contractEnd <= in30) {
+      alerts.push({ type: 'info', icon: '🟠', text: `${unit.name} 계약 만료 예정 (${c.contractEnd})`, link: 'building' })
+    }
+  })
+
+  const unitMap = Store.getUnitMap()
+  const overdue = Store.getOverdueBills()
+  const byUnit = {}
+  overdue.forEach(o => {
+    if (!byUnit[o.bill.unitId]) byUnit[o.bill.unitId] = { amount: 0, count: 0 }
+    byUnit[o.bill.unitId].amount += o.unpaid
+    byUnit[o.bill.unitId].count++
+  })
+  Object.keys(byUnit).forEach(uid => {
+    const d = byUnit[uid]
+    if (d.amount >= 100000) {
+      const unit = units.find(u => u.id === parseInt(uid))
+      alerts.push({ type: 'danger', icon: '💰', text: `${unit ? unit.name : '?'} 미수금 ${fmt(d.amount)} (${d.count}건)`, link: 'payment' })
+    } else if (d.count >= 3) {
+      const unit = units.find(u => u.id === parseInt(uid))
+      alerts.push({ type: 'warning', icon: '💰', text: `${unit ? unit.name : '?'} 미수 ${d.count}건`, link: 'payment' })
+    }
+  })
+
+  const activeUnits = contracts.filter(c => c.status === 'active').map(c => c.unitId)
+  activeUnits.forEach(uid => {
+    const unitMeters = meters.filter(m => m.unitId === uid)
+    const lastMeter = unitMeters.sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))).pop()
+    if (!lastMeter || String(lastMeter.date || '') < thisYm + '-01') {
+      const unit = units.find(u => u.id === uid)
+      if (unit) alerts.push({ type: 'info', icon: '📊', text: `${unit.name} 이번달 미검침`, link: 'meter' })
+    }
+  })
+
+  mntRecords.filter(r => r.status === 'in_progress' || r.status === 'pending').forEach(r => {
+    const unit = units.find(u => u.id === r.unitId)
+    if (r.status === 'in_progress' && r.startedAt) {
+      const days = Math.ceil((today - new Date(r.startedAt)) / 86400000)
+      if (days >= 7) {
+        alerts.push({ type: 'warning', icon: '🔧', text: `${unit ? unit.name : '?'} 유지보수 ${days}일째 진행중`, link: 'maintenance' })
+      }
+    }
+  })
+
+  alerts.sort((a, b) => {
+    const order = { danger: 0, warning: 1, info: 2 }
+    return (order[a.type] ?? 9) - (order[b.type] ?? 9)
+  })
+
+  if (!alerts.length) {
+    el.innerHTML = '<span style="color:#888">알림이 없습니다.</span>'
+    if (countEl) countEl.textContent = ''
+    if (card) card.style.display = ''
+    return
+  }
+
+  const typeColors = { danger: '#c62828', warning: '#e65100', info: '#1565c0' }
+  const typeBg = { danger: '#ffebee', warning: '#fff3e0', info: '#e3f2fd' }
+
+  if (countEl) countEl.textContent = `${alerts.length}건`
+  el.innerHTML = alerts.slice(0, 8).map(a =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5;cursor:pointer" onclick="navigateTo('${a.link}')" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+      <span style="font-size:14px">${a.icon}</span>
+      <span style="flex:1;color:${typeColors[a.type] || '#333'}">${esc(a.text)}</span>
+    </div>`
+  ).join('') + (alerts.length > 8 ? `<div style="padding:6px 0;font-size:12px;color:#888">외 ${alerts.length - 8}건...</div>` : '')
+}
+
+function renderDashMonthlyCheck() {
+  const el = document.getElementById('dash-monthly-check')
+  if (!el) return
+
+  const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
+  const thisYm = todayStr.slice(0, 7)
+  const units = Store.getUnits()
+  const contracts = Store.getContracts()
+  const meters = Store.getMeters()
+  const bills = Store.getBills()
+  const payments = Store.getPayments()
+  const mntRecords = Store.getMaintenanceRecords()
+
+  const activeContracts = contracts.filter(c => c.status === 'active')
+  const activeUnitIds = activeContracts.map(c => c.unitId)
+
+  const thisMonthBills = bills.filter(b => b.yearMonth === thisYm)
+  const billedUnitIds = new Set(thisMonthBills.map(b => b.unitId))
+  const notBilled = activeUnitIds.filter(uid => !billedUnitIds.has(uid))
+
+  const unmeteredUnits = activeUnitIds.filter(uid => {
+    const unitMeters = meters.filter(m => m.unitId === uid)
+    const lastMeter = unitMeters.sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))).pop()
+    return !lastMeter || String(lastMeter.date || '') < thisYm + '-01'
+  })
+
+  const overdue = Store.getOverdueBills()
+  const totalOverdue = overdue.reduce((s, o) => s + o.unpaid, 0)
+
+  const mntActive = mntRecords.filter(r => r.status === 'in_progress' || r.status === 'pending')
+
+  const todayMonth = today.getMonth() + 1
+  const expiringThisMonth = activeContracts.filter(c => {
+    if (!c.contractEnd) return false
+    const end = new Date(c.contractEnd)
+    return end.getMonth() + 1 === todayMonth && end.getFullYear() === today.getFullYear()
+  })
+
+  const items = []
+
+  if (notBilled.length > 0) {
+    const names = notBilled.map(uid => { const u = units.find(u => u.id === uid); return u ? u.name : '?' }).join(', ')
+    items.push({ icon: '📄', color: '#e65100', text: `미청구 세대 ${notBilled.length}호`, detail: names, link: 'billing' })
+  } else if (activeUnitIds.length > 0) {
+    items.push({ icon: '✅', color: '#2d5427', text: `청구 완료 (${activeUnitIds.length}호)`, detail: '', link: 'billing' })
+  }
+
+  if (unmeteredUnits.length > 0) {
+    const names = unmeteredUnits.map(uid => { const u = units.find(u => u.id === uid); return u ? u.name : '?' }).join(', ')
+    items.push({ icon: '📊', color: '#1565c0', text: `미검침 세대 ${unmeteredUnits.length}호`, detail: names, link: 'meter' })
+  } else if (activeUnitIds.length > 0) {
+    items.push({ icon: '✅', color: '#2d5427', text: `검침 완료 (${activeUnitIds.length}호)`, detail: '', link: 'meter' })
+  }
+
+  if (totalOverdue > 0) {
+    items.push({ icon: '💰', color: '#c62828', text: `미수금 ${fmt(totalOverdue)}`, detail: `${overdue.length}건`, link: 'payment' })
+  } else {
+    items.push({ icon: '✅', color: '#2d5427', text: '미수금 없음', detail: '', link: 'payment' })
+  }
+
+  if (mntActive.length > 0) {
+    items.push({ icon: '🔧', color: '#e65100', text: `유지보수 진행중 ${mntActive.length}건`, detail: '', link: 'maintenance' })
+  }
+
+  if (expiringThisMonth.length > 0) {
+    const names = expiringThisMonth.map(c => { const u = units.find(u => u.id === c.unitId); return u ? u.name : '?' }).join(', ')
+    items.push({ icon: '📅', color: '#f57f17', text: `이번달 만료 예정 ${expiringThisMonth.length}호`, detail: names, link: 'building' })
+  }
+
+  if (!items.length) {
+    el.innerHTML = '<span style="color:#888">점검 항목이 없습니다.</span>'
+    return
+  }
+
+  el.innerHTML = items.map(item =>
+    `<div onclick="navigateTo('${item.link}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f5f5f5;cursor:pointer" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+      <span style="font-size:16px">${item.icon}</span>
+      <div style="flex:1">
+        <span style="color:${item.color};font-weight:600">${item.text}</span>
+        ${item.detail ? `<span style="color:#888;font-size:12px;margin-left:8px">${esc(item.detail)}</span>` : ''}
+      </div>
+    </div>`
+  ).join('')
 }
 
 /* ===== 유지보수 페이지 ===== */

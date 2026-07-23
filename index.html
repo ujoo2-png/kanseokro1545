@@ -79,6 +79,21 @@
             </div>
           </div>
           <div class="card">
+            <h3>🏢 층별 현황 <span id="dash-floor-summary" style="font-weight:400;font-size:13px;color:#888"></span></h3>
+            <div style="display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid #eee;font-size:12px;flex-wrap:wrap">
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#2d5427;border-radius:3px;display:inline-block"></span> 계약 활성</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#f9a825;border-radius:3px;display:inline-block"></span> 만료 예정(30일)</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#c62828;border-radius:3px;display:inline-block"></span> 공실</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#e65100;border-radius:3px;display:inline-block"></span> 유지보수 중</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#90caf9;border-radius:3px;display:inline-block"></span> 미검침</span>
+            </div>
+            <div id="dash-floor-plan" style="padding:16px;font-size:13px;color:#888">데이터가 없습니다.</div>
+          </div>
+          <div class="card" id="dash-monthly-check-card">
+            <h3>📋 이번달 자동 점검</h3>
+            <div id="dash-monthly-check" style="padding:12px 16px;font-size:13px;color:#888">로딩중...</div>
+          </div>
+          <div class="card">
             <h3>계약 현황 <span id="dashboard-date" style="font-weight:400;font-size:13px;color:#888;margin-left:8px"></span></h3>
             <table>
               <thead><tr><th>세대</th><th>건물</th><th>계약기간</th><th>만료까지</th><th>상태</th></tr></thead>
@@ -112,15 +127,9 @@
               <div id="dash-top5" style="padding:12px 16px;font-size:13px;color:#888">데이터가 없습니다.</div>
             </div>
           </div>
-          <div class="card">
-            <h3>🏢 계약 현황 <span id="dash-floor-summary" style="font-weight:400;font-size:13px;color:#888"></span></h3>
-            <div style="display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid #eee;font-size:12px;flex-wrap:wrap">
-              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#2d5427;border-radius:3px;display:inline-block"></span> 계약 활성</span>
-              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#f9a825;border-radius:3px;display:inline-block"></span> 만료 예정(30일)</span>
-              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#c62828;border-radius:3px;display:inline-block"></span> 공실</span>
-              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#e65100;border-radius:3px;display:inline-block"></span> 유지보수 중</span>
-            </div>
-            <div id="dash-floor-plan" style="padding:16px;font-size:13px;color:#888">데이터가 없습니다.</div>
+          <div class="card" id="dash-alerts-card">
+            <h3>🔔 알림 <span id="dash-alert-count" style="font-weight:400;font-size:13px;color:#888"></span></h3>
+            <div id="dash-alerts" style="padding:12px 16px;font-size:13px;color:#888">알림이 없습니다.</div>
           </div>
           <div class="card">
             <h3>🔧 진행중인 유지보수 <span id="dash-mnt-count" style="font-weight:400;font-size:13px;color:#888">0건</span></h3>
