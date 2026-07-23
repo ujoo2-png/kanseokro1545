@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.16.1
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.16.12'
+const APP_VERSION = 'v1.17.0'
 
 const Store = {
   version: APP_VERSION,
@@ -214,6 +214,7 @@ const Store = {
 
   /** localStorage 저장 + Supabase 동기화 */
   save() {
+    this._invalidateUnitMap()
     localStorage.setItem(this._key, JSON.stringify(this._data))
     this._sbSaveAll()
   },
@@ -237,21 +238,17 @@ const Store = {
   getUsers() { return this._data.users || [] },
   /** 사용자 추가 */
   addUser(u) {
-    try {
-      const users = this.getUsers()
-      const user = { id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...u }
-      users.push(user)
-      this._data.users = users
-    } catch (e) { console.error('addUser error:', e) }
+    const users = this.getUsers()
+    const user = { id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...u }
+    users.push(user)
+    this._data.users = users
     this._sbSync('users', user)
     this.save()
   },
   /** 사용자 수정 */
   updateUser(id, data) {
-    try {
-      const idx = this._data.users.findIndex(x => x.id === id)
-      if (idx > -1) this._data.users[idx] = { ...this._data.users[idx], ...data }
-    } catch (e) { console.error('updateUser error:', e) }
+    const idx = this._data.users.findIndex(x => x.id === id)
+    if (idx > -1) this._data.users[idx] = { ...this._data.users[idx], ...data }
     this._sbSync('users', id ? this._data.users?.find(x => x.id === id) : null)
     this.save()
   },
@@ -296,12 +293,22 @@ const Store = {
   // Units
   /** @returns {Array} 세대 목록 */
   getUnits() { return this._data.units },
+  /** @returns {Map<number, object>} 세대 ID → 세대 객체 Map (O(1) 조회) */
+  getUnitMap() {
+    if (!this._unitMap) {
+      this._unitMap = new Map()
+      for (const u of (this._data.units || [])) this._unitMap.set(u.id, u)
+    }
+    return this._unitMap
+  },
+  /** 세대 Map 초기화 (데이터 변경 시 호출) */
+  _invalidateUnitMap() { this._unitMap = null },
   /** 세대 추가 */
-  addUnit(u) { const unit = { id: this._nextId(), ...u }; this._data.units.push(unit); this._sbSync('units', unit); this.save() },
+  addUnit(u) { const unit = { id: this._nextId(), ...u }; this._data.units.push(unit); this._invalidateUnitMap(); this._sbSync('units', unit); this.save() },
   /** 세대 수정 */
   updateUnit(id, data) {
     const idx = this._data.units.findIndex(u => u.id === id)
-    if (idx > -1) { this._data.units[idx] = { ...this._data.units[idx], ...data }; this._sbSync('units', this._data.units[idx]); this.save() }
+    if (idx > -1) { this._data.units[idx] = { ...this._data.units[idx], ...data }; this._invalidateUnitMap(); this._sbSync('units', this._data.units[idx]); this.save() }
   },
   /** 세대 삭제 + 연결된 검침/청구/수납/계약 모두 제거 */
   deleteUnit(id) {
@@ -318,6 +325,7 @@ const Store = {
     this._data.depositDeductions = (this._data.depositDeductions || []).filter(d => d.unitId !== id)
     this._data.contracts = this._data.contracts.filter(c => c.unitId !== id)
     this._addDeletedId('units', id)
+    this._invalidateUnitMap()
     this._sbDelete('units', id)
     this.save()
   },
@@ -339,6 +347,19 @@ const Store = {
     this._sbDelete('contracts', id)
     this.save()
   },
+  /** 만료된 계약 자동 상태 전환 (ended) — 처리된 건수 반환 */
+  expireOldContracts() {
+    const today = new Date().toISOString().slice(0, 10)
+    let count = 0
+    for (const c of (this._data.contracts || [])) {
+      if (c.status === 'active' && c.contractEnd && c.contractEnd < today) {
+        c.status = 'ended'
+        count++
+      }
+    }
+    if (count) this.save()
+    return count
+  },
 
   // Meters
   /** @returns {Array} 검침 데이터 목록 */
@@ -357,16 +378,47 @@ const Store = {
     this._sbDelete('meters', id)
     this.save()
   },
+  /** 검침 일괄 삭제 (save 호출 없음) */
+  deleteMeters(ids) {
+    ids.forEach(id => this._addDeletedId('meters', id))
+    this._data.meters = (this._data.meters || []).filter(m => !ids.includes(m.id))
+  },
 
   // Bills
   /** @returns {Array} 청구 목록 */
   getBills() { return this._data.bills },
   /** 청구 추가 */
   addBill(b) { this._data.bills.push({ id: this._nextId(), ...b }); this.save() },
+  /** 청구 일괄 추가 (save 호출 없음 — 호출 후 save() 필요) */
+  addBillNoSave(b) { this._data.bills.push({ id: this._nextId(), ...b }) },
   /** 청구 수정 (주로 status 업데이트) */
   updateBill(id, data) {
     const idx = this._data.bills.findIndex(b => b.id === id)
     if (idx > -1) { this._data.bills[idx] = { ...this._data.bills[idx], ...data }; this.save() }
+  },
+  /** 청구 삭제 */
+  deleteBill(id) {
+    this._addDeletedId('bills', id)
+    this._data.bills = (this._data.bills || []).filter(b => b.id !== id)
+    this._sbDelete('bills', id)
+    this.save()
+  },
+  /** 청구 일괄 삭제 (save 호출 없음) */
+  deleteBills(ids) {
+    ids.forEach(id => this._addDeletedId('bills', id))
+    this._data.bills = (this._data.bills || []).filter(b => !ids.includes(b.id))
+  },
+  /** 년월로 청구 일괄 삭제 (save 호출 없음) */
+  deleteBillsByYearMonth(ym) {
+    const ids = (this._data.bills || []).filter(b => b.yearMonth === ym).map(b => b.id)
+    ids.forEach(id => this._addDeletedId('bills', id))
+    this._data.bills = (this._data.bills || []).filter(b => b.yearMonth !== ym)
+  },
+  /** 전체 청구 삭제 */
+  deleteAllBills() {
+    (this._data.bills || []).forEach(b => this._addDeletedId('bills', b.id))
+    this._data.bills = []
+    this.save()
   },
 
   // Payments
@@ -374,6 +426,8 @@ const Store = {
   getPayments() { return this._data.payments },
   /** 수납 등록 */
   addPayment(p) { this._data.payments.push({ id: this._nextId(), ...p }); this.save() },
+  /** 수납 추가 (save 호출 없음 — 호출 후 save() 필요) */
+  addPaymentNoSave(p) { this._data.payments.push({ id: this._nextId(), ...p }) },
   /** 수납 삭제 */
   deletePayment(id) {
     this._addDeletedId('payments', id)
@@ -484,6 +538,13 @@ const Store = {
   updateNotice(id, data) {
     const idx = this._data.notices.findIndex(n => n.id === id)
     if (idx > -1) { this._data.notices[idx] = { ...this._data.notices[idx], ...data }; this.save() }
+  },
+  /** 공지 삭제 */
+  deleteNotice(id) {
+    this._addDeletedId('notices', id)
+    this._data.notices = (this._data.notices || []).filter(n => n.id !== id)
+    this._sbDelete('notices', id)
+    this.save()
   },
 
   // Maintenance Categories

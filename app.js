@@ -35,6 +35,33 @@ const WELFARE = {
 }
 
 /**
+ * 복지할인 계산 (전기/수도 공통)
+ * @param {string} welfareId - 복지 유형 ID
+ * @param {number} elecCost - 전기 요금 (할인 전)
+ * @param {number} waterCost - 수도 요금 (할인 전)
+ * @param {number} month - 월 (1-12)
+ * @returns {{ elecDiscount: number, waterDiscountPct: number, elecAfter: number, waterAfter: number, elecDeduction: number, waterDeduction: number }}
+ */
+function calcWelfare(welfareId, elecCost, waterCost, month) {
+  const wf = WELFARE[welfareId]
+  if (!wf) return { elecDiscount: 0, waterDiscountPct: 0, elecAfter: elecCost, waterAfter: waterCost, elecDeduction: 0, waterDeduction: 0 }
+  let elecDiscount = 0
+  const waterDiscountPct = wf.waterDiscountPct || 0
+  if (wf.elecDiscountPct) {
+    elecDiscount = Math.min(Math.round(elecCost * wf.elecDiscountPct), wf.elecDiscountMax || Infinity)
+  } else {
+    let base = wf.elecDiscount || 0
+    if (wf.elecSummer && (month === 7 || month === 8)) base = wf.elecSummer
+    elecDiscount = base
+  }
+  const elecAfter = Math.round(Math.max(0, elecCost - elecDiscount))
+  const waterAfter = Math.round(waterCost * (1 - waterDiscountPct))
+  const elecDeduction = Math.round(Math.min(elecCost, elecDiscount))
+  const waterDeduction = Math.round(waterCost * waterDiscountPct)
+  return { elecDiscount, waterDiscountPct, elecAfter, waterAfter, elecDeduction, waterDeduction }
+}
+
+/**
  * 전기요금 계산 (한국 주택용 저압 누진제)
  * @param {number} kwh - 전력 사용량
  * @returns {number} - 부가세 포함 총 전기요금 (원)
@@ -151,6 +178,7 @@ function restorePageState() {
 /** 앱 초기화 — Store 로드 → 네비게이션/모달/사이드바 설정 → 전체 렌더 + 통계 갱신 */
 async function init() {
   await Store.init()
+  Store.expireOldContracts()
   const vl = document.getElementById('version-label')
   if (vl) vl.textContent = '관리자 시스템 ' + Store.version
   if (typeof ensureAdmin === 'function') ensureAdmin()
@@ -1946,8 +1974,7 @@ function sendNotice(id) {
 
 /** 공지 삭제 */
 function deleteNotice(id) {
-  Store._data.notices = Store.getNotices().filter(n => n.id !== id)
-  Store.save()
+  Store.deleteNotice(id)
   renderAll()
 }
 
@@ -1963,8 +1990,7 @@ function generateBills() {
   const existing = Store.getBills().filter(b => b.yearMonth === ym)
   if (existing.length) {
     if (!confirm(`${ym} 청구가 이미 ${existing.length}건 있습니다. 다시 생성하시겠습니까?`)) return
-    Store._data.bills = Store.getBills().filter(b => b.yearMonth !== ym)
-    Store.save()
+    Store.deleteBillsByYearMonth(ym)
   }
   const commonInput = prompt('세대당 공용관리비를 입력하세요 (원, 0이면 미부과):', '0')
   if (commonInput === null) return
@@ -1998,23 +2024,12 @@ function generateBills() {
         waterCost = calcWater(waterUsage)
       }
     }
-    const wf = WELFARE[welfareId]
     const month = parseInt(ym.split('-')[1])
-    let elecDiscount = 0, waterDiscountPct = 0
-    if (wf) {
-      waterDiscountPct = wf.waterDiscountPct || 0
-      if (wf.elecDiscountPct) {
-        elecDiscount = Math.min(Math.round(elecCost * wf.elecDiscountPct), wf.elecDiscountMax || Infinity)
-      } else {
-        let base = wf.elecDiscount || 0
-        if (wf.elecSummer && (month === 7 || month === 8)) base = wf.elecSummer
-        elecDiscount = base
-      }
-    }
-    const elecAfter = Math.round(Math.max(0, elecCost - elecDiscount))
-    const waterAfter = Math.round(waterCost * (1 - waterDiscountPct))
-    const elecDeduction = Math.round(Math.min(elecCost, elecDiscount))
-    const waterDeduction = Math.round(waterCost * waterDiscountPct)
+    const welfare = calcWelfare(welfareId, elecCost, waterCost, month)
+    const elecAfter = welfare.elecAfter
+    const waterAfter = welfare.waterAfter
+    const elecDeduction = welfare.elecDeduction
+    const waterDeduction = welfare.waterDeduction
     const tvFee = 2500
     const commonFee = commonFeePerUnit
 
@@ -2030,9 +2045,7 @@ function generateBills() {
     }
 
     const total = rent + maintenanceFee + elecAfter + waterAfter + commonFee + tvFee + late
-    const billId = Store._nextId()
-    Store._data.bills.push({
-      id: billId,
+    const billData = {
       unitId: u.id,
       yearMonth: ym,
       rent,
@@ -2051,13 +2064,14 @@ function generateBills() {
       waterDeduction: waterDeduction,
       elecCost: Math.round(elecCost),
       waterCost: Math.round(waterCost),
-    })
+    }
+    Store.addBillNoSave(billData)
+    const billId = Store._data.bills[Store._data.bills.length - 1].id
     const prepaidBalance = Store.getPrepaidBalance(u.id)
     if (prepaidBalance > 0) {
       const deduct = Math.min(total, prepaidBalance)
       Store.deductPrepaid(u.id, deduct)
-      Store._data.payments.push({
-        id: Store._nextId(),
+      Store.addPaymentNoSave({
         unitId: u.id,
         billId,
         amount: deduct,
@@ -2066,11 +2080,9 @@ function generateBills() {
       })
       const paid = Store.getPaidTotal(billId)
       if (paid >= total) {
-        const idx = Store._data.bills.findIndex(b => b.id === billId)
-        if (idx > -1) Store._data.bills[idx].status = 'paid'
+        Store.updateBill(billId, { status: 'paid' })
       } else if (paid > 0) {
-        const idx = Store._data.bills.findIndex(b => b.id === billId)
-        if (idx > -1) Store._data.bills[idx].status = 'pending'
+        Store.updateBill(billId, { status: 'pending' })
       }
     }
   }
@@ -2085,8 +2097,7 @@ function clearAllBills() {
   const count = Store.getBills().length
   if (!count) return alert('삭제할 청구 데이터가 없습니다.')
   if (!confirm(`모든 청구 데이터(${count}건)를 삭제하시겠습니까? 삭제 후 "일괄 청구 생성"을 다시 실행해야 합니다.`)) return
-  Store._data.bills = []
-  Store.save()
+  Store.deleteAllBills()
   renderAll()
   updateStats()
   alert('모든 청구 데이터가 삭제되었습니다. "일괄 청구 생성" 버튼을 눌러 새로 생성하세요.')
@@ -2135,12 +2146,13 @@ function checkMeterIntegrity() {
 /** 고아 검침 데이터 일괄 삭제 (계약중 아닌 세대) */
 function deleteOrphanMeters() {
   const before = Store.getMeters().length
-  Store._data.meters = Store.getMeters().filter(m => {
+  const orphanIds = Store.getMeters().filter(m => {
     const hasActive = !!Store.getContracts().find(c => c.unitId === m.unitId && c.status === 'active')
-    return hasActive
-  })
+    return !hasActive
+  }).map(m => m.id)
+  Store.deleteMeters(orphanIds)
   Store.save()
-  const deleted = before - Store.getMeters().length
+  const deleted = orphanIds.length
   closeModal()
   renderAll()
   alert(`${deleted}건의 검침 데이터가 삭제되었습니다.`)
@@ -2155,8 +2167,8 @@ function clearBadBills() {
   })
   if (!badBills.length) return
   if (!confirm(`${badBills.length}건의 잘못된 청구를 삭제하고 새로 생성하시겠습니까?`)) return
-  const ids = new Set(badBills.map(b => b.id))
-  Store._data.bills = Store.getBills().filter(b => !ids.has(b.id))
+  const ids = badBills.map(b => b.id)
+  Store.deleteBills(ids)
   Store.save()
   closeModal()
   renderAll()
@@ -2177,9 +2189,8 @@ function fixBadPayments() {
   if (fixed > 0) {
     Store.save()
     closeModal()
-  renderAll()
-  updateStats()
-  initKeepAlive()
+    renderAll()
+    updateStats()
     alert(`${fixed}건의 수납 데이터가 수정되었습니다.`)
   }
 }
@@ -2628,11 +2639,23 @@ function _delSel(tbodyId, label) {
   const tname = { 'building-tbody':'Building','unit-tbody':'Unit','contract-tbody':'Contract','meter-tbody':'Meter','billing-tbody':'Bill','payment-tbody':'Payment','prepaid-tbody':'Prepaid','deposit-tbody':'DepositDeduction','notice-tbody':'Notice','inquiry-tbody':'Inquiry','mnt-tbody':'MaintenanceRecord','user-tbody':'User' }[tbodyId]
   ids.forEach(id => {
     if (tname === 'Notice') deleteNotice(id)
-    else if (tname === 'Bill') { Store._addDeletedId('bills', id); Store._data.bills = Store.getBills().filter(b => b.id !== id); Store.save() }
+    else if (tname === 'Bill') Store.deleteBill(id)
     else Store['delete' + tname](id)
   })
   renderAll()
 }
 function _ck(id) { return `<td style="width:32px;text-align:center"><input type="checkbox" class="chk" value="${id}"></td>` }
+
+/** 빈 테이블 행 반환 */
+function _emptyRow(colSpan, msg) {
+  return `<tr><td colspan="${colSpan}">${msg || '데이터가 없습니다.'}</td></tr>`
+}
+
+/** 검색 필터링 공용 함수 */
+function _filterByQuery(list, query, fields) {
+  if (!query) return list
+  const q = query.toLowerCase()
+  return list.filter(item => fields.some(f => String(item[f] || '').toLowerCase().includes(q)))
+}
 
 init()

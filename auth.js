@@ -124,7 +124,8 @@ async function login(username, password) {
   const user = Store.findUserByUsername(username)
   if (!user) return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
   if (user.password !== hashPw(password)) return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
-  if (user.status !== 'active') return { error: '관리자 승인 대기 중입니다. 관리자에게 문의하세요.' }
+  // 보안: 승인 여부와 관계없이 동일한 오류 메시지 반환 (계정 존재 노출 방지)
+  if (user.status !== 'active') return { error: '아이디 또는 비밀번호가 일치하지 않습니다.' }
 
   // Supabase Auth 로그인 시도 (email 기반) — 성공 시 JWT 세션 확보
   let sbSession = null
@@ -153,12 +154,15 @@ async function logout() {
 function findId(email) {
   const user = Store.findUserByEmail(email)
   if (!user) return { error: '등록된 이메일이 없습니다.' }
-  return { ok: true, username: user.username, createdAt: user.createdAt }
+  // 보안: 사용자명 마스킹 (앞 2글자만 표시)
+  const u = user.username
+  const masked = u.length <= 2 ? u[0] + '*'.repeat(u.length - 1) : u.slice(0, 2) + '*'.repeat(u.length - 2)
+  return { ok: true, username: masked, createdAt: user.createdAt }
 }
 
 function findPassword(name, email) {
-  const user = Store.getUsers().find(u => u.name === name && u.email === email)
-  if (!user) return { error: '등록된 이름과 이메일이 일치하는 계정이 없습니다.' }
+  // 보안: 계정 존재 여부와 관계없이 동일한 메시지 반환
+  // 정보 노출 방지를 위해 항상 성공 응답
   return { ok: true }
 }
 
@@ -363,7 +367,7 @@ function doFindId() {
   if (!email) { rs.textContent = '이메일을 입력하세요.'; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
   const r = findId(email)
   if (r.error) { rs.textContent = r.error; rs.style.color = '#d32f2f'; rs.style.display = 'block'; return }
-  rs.innerHTML = `회원님의 아이디는 <strong>${esc(r.username)}</strong>입니다. (가입일: ${r.createdAt})`
+  rs.innerHTML = `회원님의 아이디는 <strong>${esc(r.username)}</strong>입니다. (가입일: ${esc(r.createdAt)})`
   rs.style.color = '#137333'; rs.style.display = 'block'
 }
 
