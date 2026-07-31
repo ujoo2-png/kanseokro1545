@@ -3027,6 +3027,19 @@ function renderDashAlerts() {
     }
   })
 
+  // 공사 일정 자동 예측 알림: 시작 예정일 경과(접수), 종료 예정일 초과(진행중), 7일 내 공사 예정
+  const uname = id => { const u = units.find(x => x.id === id); return u ? u.name : '?' }
+  mntRecords.filter(r => r.status !== 'cancelled' && r.status !== 'completed').forEach(r => {
+    if (r.status === 'pending' && r.scheduledStartDate && r.scheduledStartDate < todayStr) {
+      alerts.push({ type: 'warning', icon: '🔧', text: `${uname(r.unitId)} 공사 시작 지연 (${r.scheduledStartDate})`, link: 'maintenance' })
+    } else if (r.status === 'pending' && r.scheduledStartDate && r.scheduledStartDate <= in7) {
+      alerts.push({ type: 'info', icon: '🔧', text: `${uname(r.unitId)} 공사 예정 (${r.scheduledStartDate})`, link: 'maintenance' })
+    }
+    if (r.status === 'in_progress' && r.scheduledEndDate && r.scheduledEndDate < todayStr) {
+      alerts.push({ type: 'warning', icon: '🔧', text: `${uname(r.unitId)} 공사 종료 초과 (${r.scheduledEndDate})`, link: 'maintenance' })
+    }
+  })
+
   const pendingResets = Store.getPasswordResetRequests().filter(r => r.status === 'pending')
   pendingResets.forEach(r => {
     alerts.push({ type: 'warning', icon: '🔑', text: `${r.name} 비밀번호 초기화 요청`, link: 'settings', subTab: 'tab-reset-requests' })
@@ -3305,10 +3318,11 @@ function renderMaintenance() {
   }
 
   if (!records.length) {
-    tbody.innerHTML = '<tr><td colspan="12">유지보수 내역이 없습니다.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="15">유지보수 내역이 없습니다.</td></tr>'
     return
   }
 
+  const todayStr = new Date().toISOString().slice(0, 10)
   tbody.innerHTML = records.map((r, i) => {
     const unit = Store.getUnits().find(u => u.id === r.unitId)
     const cat = Store.getMaintenanceCategories().find(c => c.id === r.categoryId)
@@ -3322,23 +3336,31 @@ function renderMaintenance() {
     const priorityCls = r.priority === 'high' ? 'mnt-priority-high'
       : r.priority === 'emergency' ? 'mnt-priority-emergency'
       : r.priority === 'normal' ? 'mnt-priority-normal' : ''
+    const dateCell = (v, warn) => `<span style="${warn ? 'color:#c62828;font-weight:700' : ''}">${v || '-'}${warn ? ' ⚠' : ''}</span>`
+    const delayedStart = r.status === 'pending' && r.scheduledStartDate && r.scheduledStartDate < todayStr
+    const overdueEnd = r.status === 'in_progress' && r.scheduledEndDate && r.scheduledEndDate < todayStr
+    const upNext = r.status === 'pending' && r.scheduledStartDate && r.scheduledStartDate >= todayStr
     return `<tr class="${priorityCls}">
       ${_ck(r.id)}
       <td>${records.length - i}</td>
       <td><a href="#" onclick="editMaintenance(${r.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? esc(unit.name) : '?'}</a></td>
       <td>${esc(cat ? cat.name : '-')}</td>
-      <td>${esc(r.title || '')}</td>
+      <td>${esc(r.title || '')}<br><span style="font-size:11px;color:#888">${esc(r.description || '')}</span></td>
       <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
       <td style="font-size:12px">${priorityLabel}</td>
+      <td>${dateCell(r.scheduledStartDate || '-', delayedStart)}</td>
+      <td>${dateCell(r.scheduledEndDate || '-', overdueEnd)}</td>
+      <td>${r.actualStartDate || '-'}</td>
+      <td>${r.actualEndDate || '-'}</td>
+      <td>${r.completedDate || '-'}</td>
       <td>${fmt(r.cost || 0)}</td>
       <td>${esc(r.vendor || '-')}</td>
-      <td>${r.scheduledDate || '-'}</td>
-      <td>${r.completedDate || '-'}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-secondary" onclick="editMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">삭제</button>
         ${r.status === 'pending' ? `<button class="btn btn-primary" onclick="startMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">시작</button>` : ''}
         ${r.status === 'in_progress' ? `<button class="btn btn-primary" onclick="completeMaintenance(${r.id})" style="padding:4px 8px;font-size:12px">완료</button>` : ''}
+        ${upNext ? '<span style="font-size:11px;color:#1565c0">예정</span>' : ''}
       </td>
     </tr>`
   }).join('')
@@ -3357,8 +3379,14 @@ function deleteMaintenance(id) {
 }
 
 function startMaintenance(id) {
-  if (!confirm('진행중으로 변경하시겠습니까?')) return
-  Store.updateMaintenanceRecord(id, { status: 'in_progress', updatedAt: new Date().toISOString() })
+  if (!confirm('진행중으로 변경하시겠습니까? (실제 시작일이 자동 기록됩니다)')) return
+  const today = new Date().toISOString().slice(0, 10)
+  const r = Store.getMaintenanceRecords().find(x => x.id === id)
+  Store.updateMaintenanceRecord(id, {
+    status: 'in_progress',
+    actualStartDate: (r && r.actualStartDate) || today,
+    updatedAt: new Date().toISOString(),
+  })
   renderAll()
 }
 
@@ -3367,9 +3395,11 @@ function completeMaintenance(id) {
   const cost = prompt('완료 처리합니다. 총 비용을 입력하세요 (원):', String(r ? (r.cost || 0) : 0))
   if (cost === null) return
   const result = prompt('작업 결과 / 특이사항을 입력하세요:', r ? (r.result || '') : '')
+  const today = new Date().toISOString().slice(0, 10)
   Store.updateMaintenanceRecord(id, {
     status: 'completed',
-    completedDate: new Date().toISOString().slice(0, 10),
+    completedDate: today,
+    actualEndDate: (r && r.actualEndDate) || today,
     cost: parseInt(cost.replace(/,/g, '')) || 0,
     result: result || '',
     updatedAt: new Date().toISOString(),
@@ -3380,6 +3410,21 @@ function completeMaintenance(id) {
 
 /* ===== showModal / saveModal maintenance case ===== */
 
+/* 유지보수 항목별 기본 공사기간 (자동 예측용) — 종료 예정일 미입력 시 적용 */
+const MNT_CATEGORY_DURATION_DAYS = {
+  '에어컨 점검': 1, '도배': 3, '배관 수리': 1, '전기 수리': 1, '가스 점검': 1,
+  '냉장고 교체': 1, '세탁기 교체': 1, 'TV/거실장 교체': 1, '침대 교체': 1, '옷장 교체': 1,
+  '도어락 교체': 1, '방역': 1, '기타': 2,
+}
+
+/** YYYY-MM-DD 문자열에 days(일)를 더한 날짜 문자열 반환 (시간대 안전) */
+function _addDays(dateStr, days) {
+  const [y, m, d] = String(dateStr).split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const dt = new Date(y, m - 1, d + days)
+  return [dt.getFullYear(), String(dt.getMonth() + 1).padStart(2, '0'), String(dt.getDate()).padStart(2, '0')].join('-')
+}
+
 function showMaintenanceModal(editData) {
   const title = document.getElementById('modal-title')
   const body = document.getElementById('modal-body')
@@ -3388,6 +3433,10 @@ function showMaintenanceModal(editData) {
   const cats = Store.getMaintenanceCategories()
   const seen = new Set()
   const uniqueCats = cats.filter(c => { const dup = seen.has(c.name); seen.add(c.name); return !dup })
+  const d = editData && editData.scheduledStartDate ? editData.scheduledStartDate : ''
+  const endDefault = editData && editData.scheduledEndDate ? editData.scheduledEndDate : ''
+  const selectedCat = editData ? (Store.getMaintenanceCategories().find(c => c.id === editData.categoryId) || {}).name : ''
+  const defaultEnd = d && !endDefault ? _addDays(d, MNT_CATEGORY_DURATION_DAYS[selectedCat] || 1) : ''
   body.innerHTML = `
     <div class="form-group"><label>세대</label><select id="f-mnt-unit">${
       units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')
@@ -3412,38 +3461,68 @@ function showMaintenanceModal(editData) {
       </select></div>
     </div>
     <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>공사 시작 예정일</label><input id="f-mnt-sstart" type="date" value="${editData && editData.scheduledStartDate ? editData.scheduledStartDate : ''}"></div>
+      <div class="form-group" style="flex:1"><label>종료 예정일 <span style="color:#999;font-weight:400">(자동예측)</span></label><input id="f-mnt-send" type="date" value="${endDefault || defaultEnd}"></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>실제 시작일 <span style="color:#999;font-weight:400">(자동기록)</span></label><input id="f-mnt-astart" type="date" value="${editData && editData.actualStartDate ? editData.actualStartDate : ''}"></div>
+      <div class="form-group" style="flex:1"><label>실제 종료일 <span style="color:#999;font-weight:400">(자동기록)</span></label><input id="f-mnt-aend" type="date" value="${editData && editData.actualEndDate ? editData.actualEndDate : ''}"></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>완료일</label><input id="f-mnt-cdate" type="date" value="${editData && editData.completedDate ? editData.completedDate : ''}"></div>
       <div class="form-group" style="flex:1"><label>비용 (원)</label><input id="f-mnt-cost" type="text" inputmode="numeric" value="${editData ? fm(editData.cost || 0) : ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
-      <div class="form-group" style="flex:1"><label>예정일</label><input id="f-mnt-sdate" type="date" value="${editData && editData.scheduledDate ? editData.scheduledDate : ''}"></div>
     </div>
     <div style="display:flex;gap:12px">
       <div class="form-group" style="flex:1"><label>업체명</label><input id="f-mnt-vendor" value="${editData ? esc(editData.vendor || '') : ''}"></div>
       <div class="form-group" style="flex:1"><label>업체 연락처</label><input id="f-mnt-vcontact" value="${editData ? esc(editData.vendorContact || '') : ''}"></div>
     </div>
-    ${editData && (editData.status === 'completed' || editData.completedDate) ? `
-    <div class="form-group"><label>완료일</label><input id="f-mnt-cdate" type="date" value="${editData.completedDate || ''}"></div>
-    <div class="form-group"><label>작업 결과</label><textarea id="f-mnt-result" rows="2">${esc(editData.result || '')}</textarea></div>
-    ` : ''}
+    <div class="form-group"><label>작업 결과 / 특이사항</label><textarea id="f-mnt-result" rows="2">${editData ? esc(editData.result || '') : ''}</textarea></div>
   `
 }
 
 function saveMaintenanceModal() {
+  const today = new Date().toISOString().slice(0, 10)
+  const status = document.getElementById('f-mnt-status').value
+  const scheduledStartDate = document.getElementById('f-mnt-sstart').value
+  let scheduledEndDate = document.getElementById('f-mnt-send').value
+  let actualStartDate = document.getElementById('f-mnt-astart').value
+  let actualEndDate = document.getElementById('f-mnt-aend').value
+  let completedDate = document.getElementById('f-mnt-cdate').value
+  const categoryId = parseInt(document.getElementById('f-mnt-cat').value) || null
+
+  // auto workflow — 입력 최소화, 날짜 자동 연계
+  if (!scheduledEndDate && scheduledStartDate) {
+    const cat = Store.getMaintenanceCategories().find(c => c.id === categoryId)
+    const days = MNT_CATEGORY_DURATION_DAYS[cat && cat.name] || 1
+    scheduledEndDate = _addDays(scheduledStartDate, days)
+  }
+  if ((status === 'in_progress' || status === 'completed') && !actualStartDate) actualStartDate = today
+  if (status === 'completed') {
+    if (!actualEndDate) actualEndDate = today
+    if (!completedDate) completedDate = today
+  }
+  if (status === 'cancelled') {
+    actualEndDate = actualEndDate || today
+  }
+
   const data = {
     unitId: parseInt(document.getElementById('f-mnt-unit').value),
-    categoryId: parseInt(document.getElementById('f-mnt-cat').value) || null,
+    categoryId,
     title: document.getElementById('f-mnt-title').value.trim(),
     description: document.getElementById('f-mnt-desc').value.trim(),
     priority: document.getElementById('f-mnt-priority').value,
-    status: document.getElementById('f-mnt-status').value,
+    status,
     cost: parseInt(document.getElementById('f-mnt-cost').value.replace(/,/g, '')) || 0,
-    scheduledDate: document.getElementById('f-mnt-sdate').value,
+    scheduledStartDate,
+    scheduledEndDate,
+    actualStartDate,
+    actualEndDate,
+    completedDate,
     vendor: document.getElementById('f-mnt-vendor').value.trim(),
     vendorContact: document.getElementById('f-mnt-vcontact').value.trim(),
+    result: document.getElementById('f-mnt-result').value.trim(),
     updatedAt: new Date().toISOString(),
   }
-  const cdateEl = document.getElementById('f-mnt-cdate')
-  const resultEl = document.getElementById('f-mnt-result')
-  if (cdateEl) data.completedDate = cdateEl.value
-  if (resultEl) data.result = resultEl.value.trim()
   if (!data.title) return alert('제목을 입력하세요.')
   if (!data.unitId) return alert('세대를 선택하세요.')
   if (state.editingId) Store.updateMaintenanceRecord(state.editingId, data)
