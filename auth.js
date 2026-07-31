@@ -326,6 +326,8 @@ async function doLogin() {
   if (typeof initKeepAlive === 'function') initKeepAlive()
   if (r.mustChangePassword) {
     setTimeout(() => showForcePasswordChange(), 300)
+  } else {
+    setTimeout(() => showLoginAlerts(), 350)
   }
 }
 

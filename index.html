@@ -17,10 +17,10 @@
       <nav id="nav">
         <ul>
           <li><a href="#" class="active" data-page="dashboard">🏠 대시보드</a></li>
-          <li><a href="#" data-page="building">🏢 건물/세대/계약</a></li>
+          <li><a href="#" data-page="building">🏢 건물/세대/계약 <span class="nav-badge" id="nav-badge-expire" style="display:none"></span></a></li>
           <li><a href="#" data-page="meter">📊 검침 입력</a></li>
           <li><a href="#" data-page="billing">📄 청구서 생성</a></li>
-          <li><a href="#" data-page="payment">💰 수납/미수금</a></li>
+          <li><a href="#" data-page="payment">💰 수납/미수금 <span class="nav-badge" id="nav-badge-arrears" style="display:none"></span></a></li>
           <li><a href="#" data-page="report">📊 리포트</a></li>
           <li><a href="#" data-page="maintenance">🔧 유지보수</a></li>
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
@@ -92,6 +92,10 @@
           <div class="card" id="dash-monthly-check-card">
             <h3>📋 이번달 자동 점검</h3>
             <div id="dash-monthly-check" style="padding:12px 16px;font-size:13px;color:#888">로딩중...</div>
+          </div>
+          <div class="card" id="dash-checklist-card">
+            <h3>✅ 이번달 진행 체크리스트</h3>
+            <div id="dash-checklist" style="padding:12px 16px;font-size:13px;color:#888">로딩중...</div>
           </div>
           <div class="card">
             <h3>계약 현황 <span id="dashboard-date" style="font-weight:400;font-size:13px;color:#888;margin-left:8px"></span></h3>
@@ -464,6 +468,7 @@
                 <h3>민원/문의</h3>
                 <div style="display:flex;gap:8px;align-items:center">
                   <input type="text" id="inquiry-search" placeholder="제목 / 세대 검색..." oninput="renderInquiries()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-primary" onclick="showModal('inquiry-add')">＋ 문의 등록</button>
                 </div>
             </div>
             <table>

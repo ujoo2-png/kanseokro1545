@@ -205,6 +205,7 @@ async function init() {
   renderAll()
   updateStats()
   initKeepAlive()
+  setTimeout(() => showLoginAlerts(), 350)
 }
 
 async function doLogoutUI() {
@@ -273,6 +274,7 @@ async function doForcePasswordChange() {
   if (modal) modal.remove()
   Store.addNotification({ type: 'password_changed', text: `${currentUser.name}님이 비밀번호를 변경했습니다.`, createdAt: new Date().toISOString() })
   alert('비밀번호가 변경되었습니다.')
+  setTimeout(() => showLoginAlerts(), 350)
 }
 
 function showMyProfile() {
@@ -1883,6 +1885,37 @@ function showModal(type, editData) {
       `
       break
     }
+    case 'inquiry-add': {
+      title.textContent = '민원/문의 등록'
+      const units = Store.getUnits()
+      body.innerHTML = `
+        <div class="form-group"><label>세대</label><select id="f-inq-unit">
+          <option value="">선택 안함</option>
+          ${units.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+        </select></div>
+        <div class="form-group"><label>제목</label><input id="f-inq-title"></div>
+        <div class="form-group"><label>내용</label><textarea id="f-inq-content" rows="4" style="width:100%"></textarea></div>
+      `
+      const saveBtn = document.getElementById('modal-save')
+      saveBtn.onclick = function saveInquiryAdd() {
+        const unitId = Number(document.getElementById('f-inq-unit')?.value || '')
+        const title = document.getElementById('f-inq-title')?.value.trim()
+        const content = document.getElementById('f-inq-content')?.value.trim()
+        if (!title) return alert('제목을 입력하세요.')
+        if (!content) return alert('내용을 입력하세요.')
+        const unit = Store.getUnits().find(u => u.id === unitId)
+        Store.addInquiry({
+          unitId: unitId || null,
+          unitName: unit ? unit.name : '',
+          title,
+          content,
+          userName: currentUser ? currentUser.name : '',
+        })
+        closeModal()
+        renderInquiries()
+      }
+      break
+    }
     case 'inquiry-detail': {
       title.textContent = '민원/문의 상세'
       const n = editData
@@ -2779,10 +2812,70 @@ function renderDashboardExtensions() {
   renderDashFloorPlan()
   renderDashAlerts()
   renderDashMonthlyCheck()
+  renderDashChecklist()
+  updateNavBadges()
   renderTop5Arrears()
   renderCollectionChart()
   renderDashMaintenance()
 }
+
+function updateNavBadges() {
+  const expire = document.getElementById('nav-badge-expire')
+  if (expire) {
+    const today = new Date().toISOString().slice(0, 10)
+    const limit = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10)
+    const n = Store.getContracts().filter(c => c.status === 'active' && c.contractEnd && c.contractEnd >= today && c.contractEnd <= limit).length
+    if (n > 0) { expire.textContent = n; expire.style.display = 'inline-block' }
+    else { expire.style.display = 'none' }
+  }
+  const arrears = document.getElementById('nav-badge-arrears')
+  if (arrears) {
+    const n = Store.getOverdueBills().length
+    if (n > 0) { arrears.textContent = n; arrears.style.display = 'inline-block' }
+    else { arrears.style.display = 'none' }
+  }
+}
+
+function renderDashChecklist() {
+  const el = document.getElementById('dash-checklist')
+  if (!el) return
+  const today = new Date().toISOString().slice(0, 10)
+  const thisYm = today.slice(0, 7)
+  const activeUnitIds = Store.getContracts().filter(c => c.status === 'active').map(c => c.unitId)
+  const total = activeUnitIds.length
+  if (!total) {
+    el.innerHTML = '<span style="color:#888">계약중인 세대가 없습니다.</span>'
+    return
+  }
+  const meters = Store.getMeters()
+  const unmetered = activeUnitIds.filter(uid => {
+    const lastMeter = meters.filter(m => m.unitId === uid)
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))).pop()
+    return !lastMeter || String(lastMeter.date || '') < thisYm + '-01'
+  })
+  const thisMonthBills = Store.getBills().filter(b => b.yearMonth === thisYm)
+  const billed = new Set(thisMonthBills.map(b => b.unitId))
+  const unbilled = activeUnitIds.filter(uid => !billed.has(uid))
+  const paidBills = thisMonthBills.filter(b => b.status === 'paid').length
+  const rows = [
+    { label: '검침 완료', done: total - unmetered.length, total, color: '#1565c0' },
+    { label: '청구 완료', done: total - unbilled.length, total, color: '#e65100' },
+    { label: '수납 완료', done: paidBills, total: thisMonthBills.length, color: '#2d5427' },
+  ]
+  el.innerHTML = rows.map(r => {
+    const pct = r.total ? Math.round((r.done / r.total) * 100) : 0
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:4px">
+        <span>${r.label}</span><span><b>${r.done}</b>/${r.total} (${pct}%)</span>
+      </div>
+      <div style="height:8px;background:#eee;border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${r.color};border-radius:4px"></div>
+      </div>
+    </div>`
+  }).join('')
+}
+
+/* ===== 엑셀 내보내기 (SheetJS) ===== */
 
 function renderTop5Arrears() {
   const el = document.getElementById('dash-top5')
@@ -2872,6 +2965,7 @@ function renderDashAlerts() {
   const todayStr = today.toISOString().slice(0, 10)
   const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10)
   const in30 = new Date(today.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+  const in60 = new Date(today.getTime() + 60 * 86400000).toISOString().slice(0, 10)
   const thisYm = todayStr.slice(0, 7)
   const units = Store.getUnits()
   const contracts = Store.getContracts()
@@ -2889,6 +2983,8 @@ function renderDashAlerts() {
       alerts.push({ type: 'warning', icon: '🟡', text: `${unit.name} 계약 7일 내 만료 (${c.contractEnd})`, link: 'building' })
     } else if (c.contractEnd <= in30) {
       alerts.push({ type: 'info', icon: '🟠', text: `${unit.name} 계약 만료 예정 (${c.contractEnd})`, link: 'building' })
+    } else if (c.contractEnd <= in60) {
+      alerts.push({ type: 'info', icon: '🟠', text: `${unit.name} 계약 60일 내 만료 (${c.contractEnd})`, link: 'building' })
     }
   })
 
@@ -3064,6 +3160,102 @@ function renderDashMonthlyCheck() {
       </div>
     </div>`
   ).join('')
+}
+
+/* ===== 로그인 시 알림 팝업 =====
+ * 로그인 후 미검침/미청구/미수금/계약만료(+60일)/진행중 유지보수를 순차 팝업으로 표시.
+ * 각 팝업은 "오늘 하루 보지 않기"(localStorage, 날짜별)와 "닫기" 버튼 제공. */
+
+function _alertDismissedToday(id) {
+  const k = 'kanseokro1545_alert_' + id + '_today'
+  return localStorage.getItem(k) === new Date().toISOString().slice(0, 10)
+}
+function _dismissAlertToday(id) {
+  localStorage.setItem('kanseokro1545_alert_' + id + '_today', new Date().toISOString().slice(0, 10))
+}
+
+function showLoginAlerts() {
+  if (!currentUser || typeof currentUser !== 'object') return
+  const today = new Date().toISOString().slice(0, 10)
+  const thisYm = today.slice(0, 7)
+  const units = Store.getUnits()
+  const unitMap = {}
+  units.forEach(u => { unitMap[u.id] = u })
+  const unitName = id => unitMap[id] ? unitMap[id].name : '세대 ID ' + id
+  const contracts = Store.getContracts()
+  const activeUnitIds = contracts.filter(c => c.status === 'active').map(c => c.unitId)
+  const meters = Store.getMeters()
+  const bills = Store.getBills()
+
+  const unmetered = activeUnitIds.filter(uid => {
+    const lastMeter = meters.filter(m => m.unitId === uid)
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))).pop()
+    return !lastMeter || String(lastMeter.date || '') < thisYm + '-01'
+  })
+
+  const billed = new Set(bills.filter(b => b.yearMonth === thisYm).map(b => b.unitId))
+  const unbilled = activeUnitIds.filter(uid => !billed.has(uid))
+
+  const overdue = Store.getOverdueBills()
+  const totalOverdue = overdue.reduce((s, o) => s + o.unpaid, 0)
+
+  const endLimit = new Date()
+  endLimit.setDate(endLimit.getDate() + 60)
+  const endLimitStr = endLimit.toISOString().slice(0, 10)
+  const expiring = contracts.filter(c => c.status === 'active' && c.contractEnd && c.contractEnd >= today && c.contractEnd <= endLimitStr)
+
+  const mntActive = Store.getMaintenanceRecords().filter(r => r.status === 'in_progress' || r.status === 'pending')
+
+  const alerts = []
+  if (unmetered.length) alerts.push({ id: 'unmetered', icon: '📊', color: '#1565c0', title: '미검침 세대', items: unmetered.map(uid => ({ text: unitName(uid), link: 'meter' })) })
+  if (unbilled.length) alerts.push({ id: 'unbilled', icon: '📄', color: '#e65100', title: '미청구 세대', items: unbilled.map(uid => ({ text: unitName(uid), link: 'billing' })) })
+  if (overdue.length) alerts.push({ id: 'overdue', icon: '💰', color: '#c62828', title: `미수금 ${fmt(totalOverdue)}`, items: overdue.map(o => ({ text: `${unitName(o.unitId)} ${fmt(o.unpaid)}`, link: 'payment' })) })
+  if (expiring.length) alerts.push({ id: 'expire', icon: '📅', color: '#f57f17', title: `계약 만료 예정 (${today} ~ ${endLimitStr})`, items: expiring.map(c => ({ text: `${unitName(c.unitId)} ${c.contractEnd}`, link: 'building', subTab: 'tab-contracts' })) })
+  if (mntActive.length) alerts.push({ id: 'maintenance', icon: '🔧', color: '#e65100', title: '진행중인 유지보수', items: mntActive.map(r => ({ text: `${unitName(r.unitId)} ${r.title || ''}`, link: 'maintenance' })) })
+
+  const queue = alerts.filter(a => !_alertDismissedToday(a.id))
+  if (!queue.length) return
+  _showLoginAlert(queue, 0)
+}
+
+function _showLoginAlert(queue, idx) {
+  if (!queue[idx]) return
+  const a = queue[idx]
+  const overlay = document.createElement('div')
+  overlay.id = 'login-alert-overlay'
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center'
+  const listHtml = a.items.length
+    ? a.items.map((it, i) => `
+      <div onclick="closeLoginAlert();navigateTo('${it.link}');if('${it.subTab || ''}')setTimeout(()=>switchBuildingTab('${it.subTab}'),100)"
+        style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:13px"
+        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+        <span style="width:16px;color:${a.color};font-weight:700">${i + 1}</span>
+        <span style="flex:1">${esc(it.text)}</span>
+        <span style="color:#999;font-size:11px">이동 →</span>
+      </div>`).join('')
+    : '<div style="padding:16px;text-align:center;color:#888;font-size:13px">해당 항목이 없습니다.</div>'
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:420px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">${a.icon}</span>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:700;color:#333">${esc(a.title)}</div>
+          <div style="font-size:11px;color:#999">${a.items.length}건</div>
+        </div>
+      </div>
+      <div style="max-height:320px;overflow-y:auto;padding:6px 0">${listHtml}</div>
+      <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid #eee;background:#fafafa">
+        <button onclick="closeLoginAlert();_dismissAlertToday('${a.id}');_showLoginAlert(window.__loginAlertQueue||[], ${idx + 1})" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#555;font-size:13px;font-weight:600;cursor:pointer">오늘 하루 보지 않기</button>
+        <button onclick="closeLoginAlert();_showLoginAlert(window.__loginAlertQueue||[], ${idx + 1})" style="flex:1;padding:10px;border:none;border-radius:8px;background:${a.color};color:#fff;font-size:13px;font-weight:600;cursor:pointer">닫기</button>
+      </div>
+    </div>`
+  window.__loginAlertQueue = queue
+  document.body.appendChild(overlay)
+}
+
+function closeLoginAlert() {
+  const el = document.getElementById('login-alert-overlay')
+  if (el) el.remove()
 }
 
 /* ===== 유지보수 페이지 ===== */

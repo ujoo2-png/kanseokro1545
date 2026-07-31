@@ -49,7 +49,7 @@ function exportMeters() {
 function exportBills() {
   const list = Store.getBills()
   const rows = [['세대', '청구월', '월세', '관리비', '전기', '수도', '공용', 'TV수신료', '연체료', '합계', '선수금차감', '납부상태']]
-  list.forEach(b => rows.push([_unitName(b.unitId), b.yearMonth || '', b.rent || 0, b.maintenanceFee || 0, b.electricity || 0, b.water || 0, b.common || 0, b.tvFee || 0, b.lateFee || 0, b.total || 0, b.prepaidDeduction || 0, b.status === 'paid' ? '납부완료' : '미납']))
+  list.forEach(b => rows.push([_unitName(b.unitId), b.yearMonth || '', b.rent || 0, b.maintenanceFee || 0, b.electricity || 0, b.water || 0, b.commonFee || 0, b.tvFee || 0, b.lateFee || 0, b.total || 0, b.prepaidDeduction || 0, b.status === 'paid' ? '납부완료' : '미납']))
   _excelDownload('청구내역.xlsx', { 청구내역: rows })
 }
 
