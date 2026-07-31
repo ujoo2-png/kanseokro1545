@@ -1,27 +1,30 @@
 /*
  * app.js — 건물 관리 시스템 메인 로직
- * 간석로1545 관리자 시스템 v1.16.0
+ * 간석로1545 관리자 시스템 v1.18.0
  *
  * 히스토리
- * vv1.15.5 (2026-06) 모바일 URL 기본값 Vercel로 변경
- * vv1.15.5 (2026-06) 로그인 전체화면 전환, 배경클릭/F5 차단, 색상 테마 변경 (그린/아이보리)
- * vv1.15.5 (2026-06) 엑셀 업로드/다운로드, 로그인 화면 개선(프로그램명, Enter 이동), Vercel 배포
- * vv1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
- * vv1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
- * vv1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
+ * v1.18.0 (2026-07) 계약 목록 하단 페이지네이션 추가 (25건/페이지)
+ * v1.18.0 (2026-07) 계약 목록 복구: 전체 세대(101~303호, 공실 포함) 기준 목록으로 개편
+ * v1.18.0 (2026-07) 코드 정리: js/ 폴더(구버전 사본), bump_version.py, css/style.css 삭제
+ * v1.15.5 (2026-06) 모바일 URL 기본값 Vercel로 변경
+ * v1.15.5 (2026-06) 로그인 전체화면 전환, 배경클릭/F5 차단, 색상 테마 변경 (그린/아이보리)
+ * v1.15.5 (2026-06) 엑셀 업로드/다운로드, 로그인 화면 개선(프로그램명, Enter 이동), Vercel 배포
+ * v1.15.5 (2026-06) 인증 시스템, 민원/문의 페이지, 세입자 모바일 앱, Supabase 프레임워크
+ * v1.15.5 (2026-06) 대시보드 계약 만료 예정 (1/3/6개월) 위젯, 계약 파일 첨부
+ * v1.15.5 (2026-06) 선수금 관리 (월별 자동 차감) + 보증금 차감 기능 추가
  * v1.16.9 (2026-06) 복지할인 값 수정 + 계약기간 조회 + 유저동기화/접속유지 + 기존회원 Supabase 마이그레이션
- * vv1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
- * vv1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
- * vv1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
- * vv1.15.5 (2026-06) 입금등록: 청구건 기준 세대 자동 매칭 (불일치 원천 차단)
- * vv1.15.5 (2026-06) 수납-청구건 불일치 정합성 검사 및 자동 수정 기능
- * vv1.15.5 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드
- * vv1.15.5 (2026-06) 검색필터 전메뉴 적용, 엔티티명 클릭 상세보기, A6 명세서 출력, 정합성검토+검침누락, 세대명굵게, 검침량감소체크
- * vv1.15.5 (2026-06) 청구 재생성 버그 수정, 사용량/복지필드 저장, TV수신료, 검침 날짜정렬
- * vv1.15.5 (2026-06) 복지할인, 한국 전기/수도 누진제 요금 계산 엔진
- * vv1.15.5 (2026-06) 사이드바 슬라이딩 토글, 대시보드 계약현황, 천단위 콤마
- * vv1.15.5 (2026-06) 계약관리 고도화(비상연락처, 부동산명, 계좌), 세대관리 평수/가전
- * vv1.15.5 (2026-06) 초기 릴리스 — 건물/세대/계약/검침/청구/수납/공지 CRUD
+ * v1.15.5 (2026-06) 청구서 페이지 디버그 정보, 필터/상세모달 정합성 개선
+ * v1.15.5 (2026-06) 청구서-세대 불일치 정합성 검사 + 청구 재생성 버튼
+ * v1.15.5 (2026-06) F5 새로고침 시 현재 메뉴 유지 (페이지 상태 localStorage 저장)
+ * v1.15.5 (2026-06) 입금등록: 청구건 기준 세대 자동 매칭 (불일치 원천 차단)
+ * v1.15.5 (2026-06) 수납-청구건 불일치 정합성 검사 및 자동 수정 기능
+ * v1.15.5 (2026-06) 연체료 자동 계산, 수납삭제, 연체추적 대시보드
+ * v1.15.5 (2026-06) 검색필터 전메뉴 적용, 엔티티명 클릭 상세보기, A6 명세서 출력, 정합성검토+검침누락, 세대명굵게, 검침량감소체크
+ * v1.15.5 (2026-06) 청구 재생성 버그 수정, 사용량/복지필드 저장, TV수신료, 검침 날짜정렬
+ * v1.15.5 (2026-06) 복지할인, 한국 전기/수도 누진제 요금 계산 엔진
+ * v1.15.5 (2026-06) 사이드바 슬라이딩 토글, 대시보드 계약현황, 천단위 콤마
+ * v1.15.5 (2026-06) 계약관리 고도화(비상연락처, 부동산명, 계좌), 세대관리 평수/가전
+ * v1.15.5 (2026-06) 초기 릴리스 — 건물/세대/계약/검침/청구/수납/공지 CRUD
  */
 
 let state = { currentModal: null, editingId: null }
@@ -507,6 +510,8 @@ function showContractHistory(unitId) {
 
 let _unitPage = 0
 const UNIT_PAGE_SIZE = 25
+let _contractPage = 0
+const CONTRACT_PAGE_SIZE = 25
 function renderUnits() {
   const tbody = document.getElementById('unit-tbody')
   let units = Store.getUnits()
@@ -572,30 +577,90 @@ function renderUnitPagination(totalPages) {
   el.innerHTML = html
 }
 
+function renderContractPagination(totalPages) {
+  const el = document.getElementById('contract-pagination')
+  if (!el) return
+  if (totalPages <= 1) { el.innerHTML = ''; return }
+  let html = ''
+  html += `<button class="btn btn-secondary" onclick="_contractPage=Math.max(0,_contractPage-1);renderContracts()" style="padding:3px 10px;font-size:12px" ${_contractPage === 0 ? 'disabled' : ''}>◀ 이전</button>`
+  const from = Math.max(0, _contractPage - 2)
+  const to = Math.min(totalPages, _contractPage + 3)
+  for (let p = from; p < to; p++) {
+    html += `<button class="btn ${p === _contractPage ? 'btn-primary' : 'btn-secondary'}" onclick="_contractPage=${p};renderContracts()" style="padding:3px 10px;font-size:12px">${p + 1}</button>`
+  }
+  html += `<button class="btn btn-secondary" onclick="_contractPage=Math.min(${totalPages - 1},_contractPage+1);renderContracts()" style="padding:3px 10px;font-size:12px" ${_contractPage >= totalPages - 1 ? 'disabled' : ''}>다음 ▶</button>`
+  el.innerHTML = html
+}
+
 function renderContracts() {
   const tbody = document.getElementById('contract-tbody')
-  let contracts = Store.getContracts()
+  let rows = []
+  const units = Store.getUnits()
+  const contracts = Store.getContracts()
+  const unitMap = {}
+  units.forEach(u => { unitMap[u.id] = u })
+  /* 계약 목록 = 전체 세대(공실 포함) + 세대가 삭제된 고아 계약.
+     계약이 없는 세대도 "공실" 행으로 표시하여 101~303 전체 현황을 보여준다. */
+  const hasContract = new Set()
+  contracts.forEach(c => {
+    if (unitMap[c.unitId]) hasContract.add(c.unitId)
+    rows.push({ kind: 'contract', contract: c, unit: unitMap[c.unitId] || null })
+  })
+  units.forEach(u => {
+    if (!hasContract.has(u.id)) rows.push({ kind: 'vacant', unit: u })
+  })
   const q = (document.getElementById('contract-search')?.value || '').toLowerCase()
   if (q) {
-    contracts = contracts.filter(c => {
-      const unit = Store.getUnits().find(u => u.id === c.unitId)
+    rows = rows.filter(r => {
+      if (r.kind === 'vacant') return (r.unit.name || '').toLowerCase().includes(q)
+      const c = r.contract
       return (c.tenant || '').toLowerCase().includes(q) ||
         (c.phone || '').includes(q) ||
         (c.agency || '').toLowerCase().includes(q) ||
-        (unit && unit.name.toLowerCase().includes(q))
+        (r.unit && r.unit.name.toLowerCase().includes(q))
     })
   }
   if (contractStatusFilter) {
-    contracts = contracts.filter(c => c.status === contractStatusFilter)
+    rows = rows.filter(r => r.kind !== 'vacant' && r.contract.status === contractStatusFilter)
   }
-  contracts = _sorted(contracts, 'contract-tbody', c => { const u = Store.getUnits().find(x => x.id === c.unitId); return u ? u.name : '' })
+  const _unitName = r => r.unit ? r.unit.name : 'zzzzzz'
+  const _rowKey = r => _unitName(r) + '|' + (r.contract ? (r.contract.contractStart || '') : '')
+  rows.sort((a, b) => _rowKey(a).localeCompare(_rowKey(b)))
+  rows = _sorted(rows, 'contract-tbody', _rowKey)
   document.getElementById('sort-contract-tbody-name').textContent = _sortIcon('contract-tbody', 'name')
-  if (!contracts.length) {
-    tbody.innerHTML = '<tr><td colspan="19">등록된 계약이 없습니다.</td></tr>'
+  const summaryEl = document.getElementById('contract-summary')
+  if (summaryEl) {
+    const activeCnt = contracts.filter(c => c.status === 'active').length
+    const vacantCnt = units.filter(u => !contracts.some(c => c.unitId === u.id && c.status === 'active')).length
+    summaryEl.textContent = `전체 ${units.length}호 · 계약중 ${activeCnt}호 · 공실 ${vacantCnt}호`
+  }
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="18">등록된 계약이 없습니다.</td></tr>'
+    renderContractPagination(0)
     return
   }
-  tbody.innerHTML = contracts.map(c => {
-    const unit = Store.getUnits().find(u => u.id === c.unitId)
+  const totalPages = Math.ceil(rows.length / CONTRACT_PAGE_SIZE)
+  if (_contractPage >= totalPages) _contractPage = totalPages - 1
+  const pageRows = rows.slice(_contractPage * CONTRACT_PAGE_SIZE, (_contractPage + 1) * CONTRACT_PAGE_SIZE)
+  renderContractPagination(totalPages)
+  tbody.innerHTML = pageRows.map(r => {
+    if (r.kind === 'vacant') {
+      const u = r.unit
+      return `<tr class="row-vacant">
+        <td style="width:32px"></td>
+        <td><a href="#" onclick="showContractHistory(${u.id});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${u.name}</a></td>
+        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td>
+        <td><span class="badge badge-unpaid">공실</span></td>
+        <td>
+          <button class="btn btn-secondary" onclick="showContractHistory(${u.id})" style="padding:4px 8px;font-size:12px">이력</button>
+          <button class="btn btn-primary" onclick="showModal('contract',{unitId:${u.id}})" style="padding:4px 8px;font-size:12px">계약등록</button>
+        </td>
+      </tr>`
+    }
+    const c = r.contract
+    const unit = r.unit
     const badge = c.status === 'active' ? 'badge-paid' : 'badge-unpaid'
     const label = c.status === 'active' ? '진행중' : '종료'
     const activeClass = c.status === 'active' ? 'row-active' : ''

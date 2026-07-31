@@ -296,12 +296,14 @@
                   <button class="btn btn-primary" onclick="showModal('contract')">+ 계약 추가</button>
                 </div>
               </div>
+              <div id="contract-summary" style="padding:2px 20px 0;font-size:12px;color:#666"></div>
               <div class="table-wrap"><table class="table-dense">
                 <thead><tr><th style="width:32px"><input type="checkbox" data-chk-all="contract-tbody" onchange="_chkAll('contract-tbody')"></th><th onclick="_sortBy('contract-tbody','name')" style="cursor:pointer">세대<span id="sort-contract-tbody-name"></span></th><th>세입자</th><th>연락처</th><th>비상연락처</th><th>비상연락처 관계</th><th>부동산명</th><th>계약기간</th><th>월세</th><th>관리비</th><th>보증금</th><th>은행명</th><th>계좌번호</th><th>입금주</th><th>복지할인</th><th>파일</th><th>상태</th><th>관리</th></tr></thead>
                 <tbody id="contract-tbody">
                   <tr><td colspan="18">등록된 계약이 없습니다.</td></tr>
                 </tbody>
               </table></div>
+              <div id="contract-pagination" style="display:flex;justify-content:center;align-items:center;gap:6px;padding:12px 0;font-size:13px"></div>
             </div>
           </div>
         </div>
