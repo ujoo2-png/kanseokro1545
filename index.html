@@ -25,6 +25,7 @@
           <li><a href="#" data-page="maintenance">🔧 유지보수</a></li>
           <li><a href="#" data-page="notice">📢 공지 발송</a></li>
           <li><a href="#" data-page="inquiry">📞 민원/문의</a></li>
+          <li><a href="#" data-page="library">📚 자료실</a></li>
           <li><a href="#" data-page="settings">⚙️ 설정</a></li>
         </ul>
       </nav>
@@ -477,6 +478,28 @@
               </thead>
               <tbody id="inquiry-tbody">
                 <tr><td colspan="7">민원/문의가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="page-library" class="page">
+          <div class="card">
+            <div class="card-header">
+                <h3>📚 자료실</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="doc-search" placeholder="제목 검색..." oninput="renderDocuments()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:160px;outline:none">
+                  <button class="btn btn-secondary" onclick="exportDocuments()" style="font-size:12px">엑셀</button>
+                  <button class="btn btn-secondary" onclick="_delSel('document-tbody','자료')" style="font-size:12px">선택삭제</button>
+                  <button class="btn btn-primary" onclick="showModal('document')">+ 자료 등록</button>
+                </div>
+            </div>
+            <table>
+              <thead>
+                <tr><th style="width:32px"><input type="checkbox" data-chk-all="document-tbody" onchange="_chkAll('document-tbody')"></th><th>제목</th><th>분류</th><th>파일</th><th>등록일</th><th>관리</th></tr>
+              </thead>
+              <tbody id="document-tbody">
+                <tr><td colspan="6">등록된 자료가 없습니다.</td></tr>
               </tbody>
             </table>
           </div>

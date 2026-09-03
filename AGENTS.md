@@ -20,3 +20,8 @@
 - **검침 날짜는 항상 문자열**: `Store._migrateMeterDates()`가 `init()` 시 number→string 변환을 수행한다.
 - **`.slice()`/`.localeCompare()` 호출 전 `String()` 래핑**: `m.date`가 number일 수 있으므로 `String(m.date || '').slice(...)` / `String(a.date).localeCompare(String(b.date))` 패턴을 강제한다.
 - **`_myear(m)` 헬퍼**: `report.js`에서 `String(m.date || '').slice(0, 7)`를 추상화한 공용 함수. 새 차트 추가 시 이 헬퍼를 사용한다.
+
+# 배포 파일 위치 (zip 등)
+
+- **바탕화면 = Windows 데스크톱**: `/mnt/c/Users/user/Desktop/` 이다. (`~/Desktop`은 사용자가 안 보므로 사용하지 않는다)
+- zip 생성 시 경로: `/mnt/c/Users/user/Desktop/kanseokro1545_v{버전}.zip`

@@ -434,6 +434,7 @@ function renderAll() {
   renderPrepaids()
   renderNotices()
   renderInquiries()
+  renderDocuments()
   renderUsers()
   renderRecent()
   renderDashboardContracts()
@@ -864,14 +865,16 @@ function renderPayments() {
     const overdue = Store.getOverdueBills(p.unitId).find(o => o.bill.id === p.billId)
     const ob = overdue && overdue.overdueDays > 0 ? overdueBadge(overdue.overdueDays) : null
     const srcLabel = p.source === 'prepaid' ? ' (선수금)' : p.source === 'deposit' ? ' (보증금)' : ''
+    const itemTag = p.item ? `<span style="font-size:11px;color:#888;margin-left:4px">[${esc(p.item)}]</span>` : ''
+    const memoTag = p.memo ? `<div style="font-size:11px;color:#999;margin-top:2px">${esc(p.memo)}</div>` : ''
     return `<tr>
       ${_ck(p.id)}
       <td><a href="#" onclick="showBillDetail(${bill ? bill.id : 0});return false" style="color:#2d5427;text-decoration:none;font-weight:600">${unit ? unit.name : '알 수 없음'}</a></td>
       <td>${bill ? bill.yearMonth : '-'}</td>
       <td>${fmt(bill ? bill.total : 0)}</td>
-      <td>${fmt(p.amount)}${srcLabel}</td>
+      <td>${fmt(p.amount)}${srcLabel}${itemTag}</td>
       <td>${fmt(unpaid)}</td>
-      <td>${p.date}</td>
+      <td>${p.date}${memoTag}</td>
       <td>${ob ? `<span class="badge ${ob.cls}">${ob.label}</span>` : `<span class="badge ${badge}">${label}</span>`}</td>
       <td>${p.source && p.source !== 'manual' ? '' : `<button class="btn btn-secondary" onclick="deletePayment(${p.id})" style="padding:4px 8px;font-size:12px">삭제</button>`}</td>
     </tr>`
@@ -1252,11 +1255,13 @@ function renderNotices() {
   tbody.innerHTML = notices.map(n => `
     <tr>
       ${_ck(n.id)}
-      <td><a href="#" onclick="showNoticeDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${n.title}</a></td>
+      <td><a href="#" onclick="showNoticeDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${n.title} ${n.fileData ? '<span style="color:#888;font-size:11px">📎</span>' : ''}</a></td>
       <td>${n.date}</td>
       <td><span class="badge ${n.sent ? 'badge-paid' : 'badge-pending'}">${n.sent ? '발송완료' : '미발송'}</span></td>
       <td>
         ${n.sent ? '' : `<button class="btn btn-primary" onclick="sendNotice(${n.id})" style="padding:4px 8px;font-size:12px">발송</button>`}
+        <button class="btn btn-secondary" onclick="showNoticeDetail(${n.id})" style="padding:4px 8px;font-size:12px">상세</button>
+        <button class="btn btn-secondary" onclick="editNotice(${n.id})" style="padding:4px 8px;font-size:12px">수정</button>
         <button class="btn btn-secondary" onclick="deleteNotice(${n.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
     </tr>
@@ -1277,13 +1282,13 @@ function renderInquiries() {
   tbody.innerHTML = list.sort((a, b) => b.createdAt?.localeCompare(a.createdAt)).map(n => `
     <tr>
       ${_ck(n.id)}
-      <td><a href="#" onclick="showInquiryDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${esc(n.title)}</a></td>
+      <td><a href="#" onclick="showInquiryDetail(${n.id});return false" style="color:#2d5427;text-decoration:none">${esc(n.title)} ${n.answerFileData ? '<span style="color:#888;font-size:11px">📎</span>' : ''}</a></td>
       <td>${esc(n.unitName || '')}</td>
       <td>${esc(n.userName || '')}</td>
       <td>${n.createdAt || ''}</td>
       <td><span class="badge ${n.reply ? 'badge-paid' : 'badge-pending'}">${n.reply ? '답변완료' : '대기중'}</span></td>
       <td>
-        <button class="btn btn-primary" onclick="showInquiryDetail(${n.id})" style="padding:4px 8px;font-size:12px">답변</button>
+        <button class="btn btn-primary" onclick="showInquiryDetail(${n.id})" style="padding:4px 8px;font-size:12px">${n.reply ? '답변보기/수정' : '답변'}</button>
         <button class="btn btn-secondary" onclick="deleteInquiry(${n.id})" style="padding:4px 8px;font-size:12px">삭제</button>
       </td>
     </tr>
@@ -1705,6 +1710,13 @@ function showModal(type, editData) {
           }</select>
         </div>
         <div class="form-group"><label>납부액</label><input id="f-pamount" type="text" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')"></div>
+        <div class="form-group"><label>항목 선택</label><select id="f-pitem">
+          <option value="월세">월세</option>
+          <option value="관리비">관리비</option>
+          <option value="수도+전기요금">수도+전기요금</option>
+          <option value="기타">기타</option>
+        </select></div>
+        <div class="form-group"><label>비고</label><input id="f-pmemo" placeholder="비고 (선택)"></div>
         <div class="form-group"><label>납부일</label><input id="f-pdate" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
       `
       const syncUnitFromBill = () => {
@@ -1874,14 +1886,26 @@ function showModal(type, editData) {
         <p style="font-size:15px;font-weight:600;margin-bottom:8px">${esc(n.title)}</p>
         <p style="font-size:12px;color:#888;margin-bottom:12px">${n.date || '-'} ${n.sent ? '· 발송완료' : '· 미발송'}</p>
         <div style="font-size:13px;line-height:1.6;white-space:pre-wrap">${esc(n.content || '')}</div>
+        ${n.fileData ? `<div style="margin-top:14px;border-top:1px solid #eee;padding-top:10px">
+          <span style="font-size:12px;color:#666">📎 <a href="#" onclick="previewNoticeFile(${n.id});return false" style="color:#2d5427">${esc(n.fileName)}</a></span>
+        </div>` : ''}
       `
       break
     }
     case 'notice': {
-      title.textContent = '공지 작성'
+      title.textContent = editData ? '공지 수정' : '공지 작성'
       body.innerHTML = `
-        <div class="form-group"><label>제목</label><input id="f-ntitle"></div>
-        <div class="form-group"><label>내용</label><textarea id="f-ncontent" rows="5"></textarea></div>
+        <div class="form-group"><label>제목</label><input id="f-ntitle" value="${editData ? esc(editData.title || '') : ''}"></div>
+        <div class="form-group"><label>내용</label><textarea id="f-ncontent" rows="5">${editData ? esc(editData.content || '') : ''}</textarea></div>
+        <div class="form-group" style="border-top:1px solid #eee;padding-top:10px;margin-top:6px">
+          <label>첨부 파일</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="f-nfile" type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx,.txt,.hwp" style="font-size:13px;flex:1;min-width:0">
+            ${editData && editData.fileName ? `<span style="font-size:12px;color:#666">📎 ${esc(editData.fileName)}</span>
+            <button type="button" class="btn btn-secondary" onclick="previewNoticeFile(${editData.id})" style="font-size:11px;padding:3px 8px">미리보기</button>
+            <button type="button" class="btn btn-secondary" onclick="removeNoticeFile(${editData.id})" style="font-size:11px;padding:3px 8px">파일삭제</button>` : ''}
+          </div>
+        </div>
       `
       break
     }
@@ -1895,6 +1919,7 @@ function showModal(type, editData) {
         </select></div>
         <div class="form-group"><label>제목</label><input id="f-inq-title"></div>
         <div class="form-group"><label>내용</label><textarea id="f-inq-content" rows="4" style="width:100%"></textarea></div>
+        <div class="form-group"><label>첨부 파일 (선택)</label><input id="f-inq-file" type="file" accept=".pdf,.jpg,.jpeg,.png" style="font-size:13px"></div>
       `
       const saveBtn = document.getElementById('modal-save')
       saveBtn.onclick = function saveInquiryAdd() {
@@ -1904,6 +1929,28 @@ function showModal(type, editData) {
         if (!title) return alert('제목을 입력하세요.')
         if (!content) return alert('내용을 입력하세요.')
         const unit = Store.getUnits().find(u => u.id === unitId)
+        const fileInput = document.getElementById('f-inq-file')
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0]
+          if (file.size > 10 * 1024 * 1024) return alert('파일 크기는 10MB 이하여야 합니다.')
+          const reader = new FileReader()
+          reader.onload = function (e) {
+            Store.addInquiry({
+              unitId: unitId || null,
+              unitName: unit ? unit.name : '',
+              title,
+              content,
+              userName: currentUser ? currentUser.name : '',
+              answerFileName: file.name,
+              answerFileType: file.type,
+              answerFileData: e.target.result,
+            })
+            closeModal()
+            renderInquiries()
+          }
+          reader.readAsDataURL(file)
+          return
+        }
         Store.addInquiry({
           unitId: unitId || null,
           unitName: unit ? unit.name : '',
@@ -1926,30 +1973,62 @@ function showModal(type, editData) {
           <p style="font-size:12px;color:#888">${esc(n.userName || '')} · ${n.unitName || ''} · ${n.createdAt || ''}</p>
         </div>
         <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;padding:12px;background:#f9f9f9;border-radius:6px;margin-bottom:16px">${esc(n.content || '')}</div>
+        ${n.answerFileData ? `<div style="font-size:11px;color:#888;margin-bottom:8px">문의 첨부: 📎 <a href="#" onclick="previewInquiryAnswerFile(${n.id});return false" style="color:#2d5427">${esc(n.answerFileName)}</a></div>` : ''}
         ${n.reply ? `
-          <div style="border-top:1px solid #e0e0e0;padding-top:12px">
-            <p style="font-size:13px;font-weight:600;color:#2d5427;margin-bottom:4px">📨 관리자 답변</p>
+          <div style="border-top:1px solid #e0e0e0;padding-top:12px;margin-bottom:16px">
+            <p style="font-size:13px;font-weight:600;color:#2d5427;margin-bottom:4px">📨 등록된 답변</p>
             <p style="font-size:12px;color:#888;margin-bottom:8px">${n.repliedAt || ''}</p>
             <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;padding:12px;background:#e8f0fe;border-radius:6px">${esc(n.reply)}</div>
+            ${n.replyFileData ? `<div style="font-size:11px;color:#888;margin-top:8px">답변 첨부: 📎 <a href="#" onclick="previewInquiryReplyFile(${n.id});return false" style="color:#2d5427">${esc(n.replyFileName)}</a></div>` : ''}
           </div>
-        ` : `
-          <div style="border-top:1px solid #e0e0e0;padding-top:12px">
-            <div class="form-group"><label>답변</label><textarea id="f-inquiry-reply" rows="4" style="width:100%"></textarea></div>
+        ` : ''}
+        <div style="border-top:1px solid #e0e0e0;padding-top:12px">
+          <div class="form-group"><label>${n.reply ? '답변 수정 / 재답변' : '답변'}</label><textarea id="f-inquiry-reply" rows="4" style="width:100%">${n.reply ? esc(n.reply) : ''}</textarea></div>
+          <div class="form-group" style="border-top:1px solid #eee;padding-top:10px;margin-top:6px">
+            <label>답변 첨부 파일</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input id="f-inquiry-replyfile" type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx,.txt,.hwp" style="font-size:13px;flex:1;min-width:0">
+              ${n.replyFileData ? `<span style="font-size:12px;color:#666">📎 ${esc(n.replyFileName)}</span>` : ''}
+            </div>
           </div>
-        `}
+        </div>
       `
       const saveBtn = document.getElementById('modal-save')
-      if (n.reply) {
-        saveBtn.style.display = 'none'
-      } else {
-        saveBtn.style.display = ''
-        saveBtn.onclick = function saveInquiryReply() {
-          const reply = document.getElementById('f-inquiry-reply')?.value.trim()
-          if (!reply) return alert('답변을 입력하세요.')
-          Store.updateInquiry(n.id, { reply, repliedAt: new Date().toISOString().slice(0, 10) })
-          closeModal()
-          renderInquiries()
+      saveBtn.style.display = ''
+      saveBtn.textContent = n.reply ? '답변 수정' : '답변 등록'
+      saveBtn.onclick = function saveInquiryReply() {
+        const reply = document.getElementById('f-inquiry-reply')?.value.trim()
+        if (!reply) return alert('답변을 입력하세요.')
+        const fileInput = document.getElementById('f-inquiry-replyfile')
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0]
+          if (file.size > 10 * 1024 * 1024) return alert('파일 크기는 10MB 이하여야 합니다.')
+          const reader = new FileReader()
+          reader.onload = function (e) {
+            Store.updateInquiry(n.id, {
+              reply,
+              repliedAt: new Date().toISOString().slice(0, 10),
+              replyFileName: file.name,
+              replyFileType: file.type,
+              replyFileData: e.target.result,
+            })
+            closeModal()
+            renderInquiries()
+          }
+          reader.readAsDataURL(file)
+          return
         }
+        // 파일 변경 없음 - 기존 파일 유지
+        const existing = Store.getInquiries().find(x => x.id === n.id)
+        Store.updateInquiry(n.id, {
+          reply,
+          repliedAt: new Date().toISOString().slice(0, 10),
+          replyFileName: (existing && existing.replyFileData) ? existing.replyFileName : undefined,
+          replyFileType: (existing && existing.replyFileData) ? existing.replyFileType : undefined,
+          replyFileData: (existing && existing.replyFileData) ? existing.replyFileData : undefined,
+        })
+        closeModal()
+        renderInquiries()
       }
       break
     }
@@ -1973,6 +2052,66 @@ function showModal(type, editData) {
           ${units.map(u => `<option value="${u.id}" ${editData && editData.unitId === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
         </select></div>
       `
+      break
+    }
+    case 'document': {
+      const isEdit = editData && editData.id
+      title.textContent = isEdit ? '자료 수정' : '자료 등록'
+      body.innerHTML = `
+        <div class="form-group"><label>제목</label><input id="f-doc-title" value="${editData ? esc(editData.title || '') : ''}"></div>
+        <div class="form-group"><label>분류</label><select id="f-doc-cat">
+          <option value="운영일지" ${editData && editData.category === '운영일지' ? 'selected' : ''}>운영일지</option>
+          <option value="공문" ${editData && editData.category === '공문' ? 'selected' : ''}>공문</option>
+          <option value="보고서" ${editData && editData.category === '보고서' ? 'selected' : ''}>보고서</option>
+          <option value="기타" ${editData && editData.category === '기타' ? 'selected' : ''}>기타</option>
+        </select></div>
+        <div class="form-group"><label>설명</label><textarea id="f-doc-desc" rows="3">${editData ? esc(editData.description || '') : ''}</textarea></div>
+        <div class="form-group" style="border-top:1px solid #eee;padding-top:10px;margin-top:6px">
+          <label>첨부 파일</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="f-doc-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx,.txt,.hwp" style="font-size:13px;flex:1;min-width:0">
+            ${editData && editData.fileName ? `<span style="font-size:12px;color:#666">📎 ${esc(editData.fileName)}</span>
+            <button type="button" class="btn btn-secondary" onclick="previewDocumentFile(${editData.id})" style="font-size:11px;padding:3px 8px">미리보기</button>
+            <button type="button" class="btn btn-secondary" onclick="removeDocumentFile(${editData.id})" style="font-size:11px;padding:3px 8px">파일삭제</button>` : ''}
+          </div>
+        </div>
+      `
+      const saveBtn = document.getElementById('modal-save')
+      saveBtn.onclick = function saveDocument() {
+        const docTitle = document.getElementById('f-doc-title')?.value.trim()
+        if (!docTitle) return alert('제목을 입력하세요.')
+        const docData = {
+          title: docTitle,
+          category: document.getElementById('f-doc-cat')?.value || '',
+          description: document.getElementById('f-doc-desc')?.value.trim(),
+        }
+        const fileInput = document.getElementById('f-doc-file')
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0]
+          if (file.size > 10 * 1024 * 1024) return alert('파일 크기는 10MB 이하여야 합니다.')
+          const reader = new FileReader()
+          reader.onload = function (e) {
+            docData.fileName = file.name
+            docData.fileType = file.type
+            docData.fileData = e.target.result
+            if (isEdit) Store.updateDocument(editData.id, docData)
+            else Store.addDocument(docData)
+            closeModal()
+            renderDocuments()
+          }
+          reader.readAsDataURL(file)
+          return
+        }
+        if (isEdit) {
+          const existing = Store.getDocuments().find(x => x.id === editData.id)
+          if (existing && existing.fileData) { docData.fileName = existing.fileName; docData.fileType = existing.fileType; docData.fileData = existing.fileData }
+          Store.updateDocument(editData.id, docData)
+        } else {
+          Store.addDocument(docData)
+        }
+        closeModal()
+        renderDocuments()
+      }
       break
     }
   }
@@ -2123,6 +2262,8 @@ function saveModal() {
         amount: parseInt(document.getElementById('f-pamount').value.replace(/,/g, '')) || 0,
         date: document.getElementById('f-pdate').value,
         source: 'manual',
+        item: document.getElementById('f-pitem')?.value || '기타',
+        memo: (document.getElementById('f-pmemo')?.value || '').trim(),
       }
       if (data.amount <= 0) return alert('납부액을 입력하세요.')
       Store.addPayment(data)
@@ -2188,7 +2329,33 @@ function saveModal() {
         sent: false,
       }
       if (!data.title) return alert('제목을 입력하세요.')
-      Store.addNotice(data)
+      const fileInput = document.getElementById('f-nfile')
+      if (fileInput && fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0]
+        if (file.size > 10 * 1024 * 1024) return alert('파일 크기는 10MB 이하여야 합니다.')
+        const reader = new FileReader()
+        reader.onload = function (e) {
+          data.fileName = file.name
+          data.fileType = file.type
+          data.fileData = e.target.result
+          if (state.editingId) { data.date = Store.getNotices().find(x => x.id === state.editingId).date; Store.updateNotice(state.editingId, data) }
+          else Store.addNotice(data)
+          closeModal()
+          renderAll()
+        }
+        reader.readAsDataURL(file)
+        return
+      }
+      // 파일 변경이 없으면 기존 파일 유지 (editing 시)
+      if (state.editingId) {
+        const existing = Store.getNotices().find(x => x.id === state.editingId)
+        if (existing && existing.fileData) { data.fileName = existing.fileName; data.fileType = existing.fileType; data.fileData = existing.fileData }
+        data.date = existing.date
+        data.sent = existing.sent
+        Store.updateNotice(state.editingId, data)
+      } else {
+        Store.addNotice(data)
+      }
       break
     }
     case 'user': {
@@ -2279,6 +2446,63 @@ function previewContractFile(id) {
 function removeContractFile(id) {
   if (!confirm('첨부 파일을 삭제하시겠습니까?')) return
   Store.updateContract(id, { fileName: undefined, fileType: undefined, fileData: undefined })
+  renderAll()
+}
+
+/** 공지 첨부 파일 미리보기 */
+function previewNoticeFile(id) {
+  const n = Store.getNotices().find(x => x.id === id)
+  if (!n || !n.fileData) return alert('첨부 파일이 없습니다.')
+  const w = window.open('', '_blank')
+  w.document.write(`<html><head><title>${n.fileName}</title><style>body{margin:0;display:flex;justify-content:center;background:#eee}iframe{width:100%;height:100vh;border:none}</style></head><body>`)
+  if (n.fileType && n.fileType.startsWith('image/')) {
+    w.document.write(`<img src="${n.fileData}" style="max-width:100%;max-height:100vh;object-fit:contain">`)
+  } else {
+    w.document.write(`<iframe src="${n.fileData}"></iframe>`)
+  }
+  w.document.write('</body></html>')
+  w.document.close()
+}
+
+/** 공지 첨부 파일 삭제 */
+function removeNoticeFile(id) {
+  if (!confirm('첨부 파일을 삭제하시겠습니까?')) return
+  Store.updateNotice(id, { fileName: undefined, fileType: undefined, fileData: undefined })
+  renderAll()
+}
+
+/** 첨부 파일 미리보기 (dataURL 기반) */
+function openFilePreview(fileName, fileType, fileData) {
+  if (!fileData) return alert('첨부 파일이 없습니다.')
+  const w = window.open('', '_blank')
+  w.document.write(`<html><head><title>${fileName}</title><style>body{margin:0;display:flex;justify-content:center;background:#eee}iframe{width:100%;height:100vh;border:none}</style></head><body>`)
+  if (fileType && fileType.startsWith('image/')) {
+    w.document.write(`<img src="${fileData}" style="max-width:100%;max-height:100vh;object-fit:contain">`)
+  } else {
+    w.document.write(`<iframe src="${fileData}"></iframe>`)
+  }
+  w.document.write('</body></html>')
+  w.document.close()
+}
+
+/** 문의 원글 첨부 파일 미리보기 */
+function previewInquiryAnswerFile(id) {
+  const q = Store.getInquiries().find(x => x.id === id)
+  if (!q) return alert('문의를 찾을 수 없습니다.')
+  openFilePreview(q.answerFileName, q.answerFileType, q.answerFileData)
+}
+
+/** 문의 답변 첨부 파일 미리보기 */
+function previewInquiryReplyFile(id) {
+  const q = Store.getInquiries().find(x => x.id === id)
+  if (!q) return alert('문의를 찾을 수 없습니다.')
+  openFilePreview(q.replyFileName, q.replyFileType, q.replyFileData)
+}
+
+/** 자료실 첨부 파일 삭제 */
+function removeDocumentFile(id) {
+  if (!confirm('첨부 파일을 삭제하시겠습니까?')) return
+  Store.updateDocument(id, { fileName: undefined, fileType: undefined, fileData: undefined })
   renderAll()
 }
 
@@ -2524,6 +2748,13 @@ function showNoticeDetail(id) {
   const notice = Store.getNotices().find(n => n.id === id)
   if (!notice) return alert('공지를 찾을 수 없습니다.')
   showModal('notice-detail', notice)
+}
+
+/** 공지 수정 모달 */
+function editNotice(id) {
+  const notice = Store.getNotices().find(n => n.id === id)
+  if (!notice) return alert('공지를 찾을 수 없습니다.')
+  showModal('notice', notice)
 }
 
 /** A6 명세서 출력 미리보기 (A4 × 4 레이아웃, 새 창) */
@@ -3559,7 +3790,7 @@ function _delSel(tbodyId, label) {
   const ids = Array.from(document.querySelectorAll(`#${tbodyId} .chk:checked`)).map(c => parseInt(c.value))
   if (!ids.length) return alert('선택된 항목이 없습니다.')
   if (!confirm(`${ids.length}개의 ${label}을(를) 삭제하시겠습니까?`)) return
-  const tname = { 'building-tbody':'Building','unit-tbody':'Unit','contract-tbody':'Contract','meter-tbody':'Meter','billing-tbody':'Bill','payment-tbody':'Payment','prepaid-tbody':'Prepaid','deposit-tbody':'DepositDeduction','notice-tbody':'Notice','inquiry-tbody':'Inquiry','mnt-tbody':'MaintenanceRecord','user-tbody':'User' }[tbodyId]
+  const tname = { 'building-tbody':'Building','unit-tbody':'Unit','contract-tbody':'Contract','meter-tbody':'Meter','billing-tbody':'Bill','payment-tbody':'Payment','prepaid-tbody':'Prepaid','deposit-tbody':'DepositDeduction','notice-tbody':'Notice','inquiry-tbody':'Inquiry','mnt-tbody':'MaintenanceRecord','user-tbody':'User','document-tbody':'Document' }[tbodyId]
   ids.forEach(id => {
     if (tname === 'Notice') deleteNotice(id)
     else if (tname === 'Bill') Store.deleteBill(id)
@@ -3574,7 +3805,59 @@ function _emptyRow(colSpan, msg) {
   return `<tr><td colspan="${colSpan}">${msg || '데이터가 없습니다.'}</td></tr>`
 }
 
-/** 검색 필터링 공용 함수 */
+// ── 자료실 ────────────────────────────────────────
+function renderDocuments() {
+  const tbody = document.getElementById('document-tbody')
+  if (!tbody) return
+  const query = (document.getElementById('doc-search')?.value || '').trim().toLowerCase()
+  let list = Store.getDocuments()
+  if (query) list = list.filter(d => (d.title || '').toLowerCase().includes(query) || (d.category || '').toLowerCase().includes(query))
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6">등록된 자료가 없습니다.</td></tr>'; return }
+  tbody.innerHTML = list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).map(d => `
+    <tr>
+      ${_ck(d.id)}
+      <td><a href="#" onclick="showDocumentDetail(${d.id});return false" style="color:#2d5427;text-decoration:none">${esc(d.title)}</a></td>
+      <td>${esc(d.category || '')}</td>
+      <td>${d.fileName ? `<a href="#" onclick="previewDocumentFile(${d.id});return false" style="color:#2d5427">📎 ${esc(d.fileName)}</a>` : '-'}</td>
+      <td>${d.createdAt || ''}</td>
+      <td>
+        <button class="btn btn-secondary" onclick="showDocumentDetail(${d.id})" style="padding:4px 8px;font-size:12px">상세/수정</button>
+        <button class="btn btn-secondary" onclick="deleteDocumentItem(${d.id})" style="padding:4px 8px;font-size:12px">삭제</button>
+      </td>
+    </tr>
+  `).join('')
+}
+
+function showDocumentDetail(id) {
+  const doc = Store.getDocuments().find(d => d.id === id)
+  if (!doc) return alert('자료를 찾을 수 없습니다.')
+  showModal('document', doc)
+}
+
+function deleteDocumentItem(id) {
+  if (!confirm('이 자료를 삭제하시겠습니까?')) return
+  Store.deleteDocument(id)
+  renderDocuments()
+}
+
+function previewDocumentFile(id) {
+  const doc = Store.getDocuments().find(d => d.id === id)
+  if (!doc || !doc.fileData) return alert('첨부 파일이 없습니다.')
+  openFilePreview(doc.fileName, doc.fileType, doc.fileData)
+}
+
+function exportDocuments() {
+  const list = Store.getDocuments()
+  if (!list.length) return alert('내보낼 자료가 없습니다.')
+  const csv = '\uFEFF제목,분류,파일명,등록일\n' + list.map(d => `${d.title || ''},${d.category || ''},${d.fileName || ''},${d.createdAt || ''}`).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `자료실_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+}
+
+// ── 검색 필터링 공용 함수 ──────────────────────────
 function _filterByQuery(list, query, fields) {
   if (!query) return list
   const q = query.toLowerCase()

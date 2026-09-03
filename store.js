@@ -3,7 +3,7 @@
  * 간석로1545 관리자 시스템 v1.17.2
  * localStorage에 캐싱 + Supabase에 실시간 동기화
  */
-const APP_VERSION = 'v1.21.0'
+const APP_VERSION = 'v1.22.0'
 
 const Store = {
   version: APP_VERSION,
@@ -31,7 +31,7 @@ const Store = {
   },
 
   _sbTable(name) {
-    const map = { buildings:'buildings', units:'units', contracts:'contracts', meters:'meters', bills:'bills', payments:'payments', users:'users', notices:'notices', prepaids:'prepaids', depositDeductions:'deposit_deductions', inquiries:'inquiries', maintenanceCategories:'maintenance_categories', maintenanceRecords:'maintenance_records', notifications:'notifications' }
+    const map = { buildings:'buildings', units:'units', contracts:'contracts', meters:'meters', bills:'bills', payments:'payments', users:'users', notices:'notices', prepaids:'prepaids', depositDeductions:'deposit_deductions', inquiries:'inquiries', maintenanceCategories:'maintenance_categories', maintenanceRecords:'maintenance_records', notifications:'notifications', documents:'documents' }
     return map[name]
   },
 
@@ -119,14 +119,14 @@ const Store = {
   },
 
   _ensureArrays() {
-    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices','maintenanceCategories','maintenanceRecords','notifications','passwordResetRequests']
+    const tables = ['buildings','contracts','users','prepaids','depositDeductions','inquiries','units','meters','bills','payments','notices','maintenanceCategories','maintenanceRecords','notifications','passwordResetRequests','documents']
     for (const t of tables) if (!this._data[t]) this._data[t] = []
   },
 
   async _loadFromSupabase() {
     const sb = getSupabase()
     if (!sb) return
-    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications']
+    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications','documents']
     const deletedIds = this._getDeletedIds()
     for (const table of tables) {
       try {
@@ -151,7 +151,7 @@ const Store = {
 
   /** 중복 ID를 가진 모든 데이터에 새 ID 부여 + 참조(payments.billId) 업데이트 */
   _fixDuplicateIds() {
-    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions', 'users', 'inquiries', 'maintenanceCategories', 'maintenanceRecords', 'notifications']
+    const keys = ['bills', 'payments', 'units', 'buildings', 'contracts', 'meters', 'notices', 'prepaids', 'depositDeductions', 'users', 'inquiries', 'maintenanceCategories', 'maintenanceRecords', 'notifications', 'documents']
     const renamed = []
     for (const key of keys) {
       const arr = this._data[key]
@@ -209,6 +209,7 @@ const Store = {
       maintenanceRecords: [],
       notifications: [],
       passwordResetRequests: [],
+      documents: [],
     }
     this.save()
   },
@@ -223,7 +224,7 @@ const Store = {
   async _sbSaveAll() {
     const sb = getSupabase()
     if (!sb) return
-    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications']
+    const tables = ['buildings','units','contracts','meters','bills','payments','users','notices','prepaids','depositDeductions','inquiries','maintenanceCategories','maintenanceRecords','notifications','documents']
     for (const table of tables) {
       const items = this._data[table]
       if (!items || !items.length) continue
@@ -637,6 +638,24 @@ const Store = {
     this._addDeletedId('notifications', id)
     this._data.notifications = (this._data.notifications || []).filter(x => x.id !== id)
     this._sbDelete('notifications', id)
+    this.save()
+  },
+
+  // Documents (자료실)
+  /** @returns {Array} 자료실 파일 목록 */
+  getDocuments() { return this._data.documents || [] },
+  /** 자료실 파일 추가 */
+  addDocument(d) { this._data.documents.push({ id: this._nextId(), createdAt: new Date().toISOString().slice(0, 10), ...d }); this.save() },
+  /** 자료실 파일 수정 */
+  updateDocument(id, data) {
+    const idx = this._data.documents.findIndex(x => x.id === id)
+    if (idx > -1) { this._data.documents[idx] = { ...this._data.documents[idx], ...data }; this.save() }
+  },
+  /** 자료실 파일 삭제 */
+  deleteDocument(id) {
+    this._addDeletedId('documents', id)
+    this._data.documents = (this._data.documents || []).filter(x => x.id !== id)
+    this._sbDelete('documents', id)
     this.save()
   },
 }
